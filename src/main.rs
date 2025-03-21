@@ -42,51 +42,78 @@ struct UsbRedirSubcommand {
     path: String,
 }
 
-// owned version of mctp_estack::MctpMessage
-#[derive(Debug)]
-#[allow(unused)]
-struct MctpMessage {
-    pub source: Eid,
-    pub dest: Eid,
-    pub tag: Tag,
-    pub typ: MsgType,
-    pub ic: bool,
-
-    payload: Vec<u8>,
-}
-
-/*
 enum Transport {
-    Serial(serial::MctpSerial),
-    Usb(usbredir::MctpUsbRedir),
+    Serial(serial::MctpSerialListener),
+    Usb(usbredir::MctpUsbRedirListener),
 }
+
+enum TransportResp<'a> {
+    Serial(serial::MctpSerialResp<'a>),
+    Usb(usbredir::MctpUsbRedirResp<'a>),
+}
+
+struct TransportReq { }
 
 impl Transport {
-    async fn recv(&mut self) -> Result<MctpMessage> {
+    async fn recv<'f>(&mut self, rx_buf: &'f mut [u8])
+    -> mctp::Result<(&'f mut [u8], TransportResp, Tag, MsgType, bool)> {
         match self {
-            Self::Serial(s) => s.recv().await,
-            Self::Usb(u) => u.recv().await,
+            Self::Serial(s) => {
+                let (buf, resp, tag, typ, ic) = s.recv(rx_buf).await?;
+                Ok((buf, TransportResp::Serial(resp), tag, typ, ic))
+            }
+            Self::Usb(u) => {
+                let (buf, resp, tag, typ, ic) = u.recv(rx_buf).await?;
+                Ok((buf, TransportResp::Usb(resp), tag, typ, ic))
+            }
         }
     }
 }
-*/
 
-impl MctpMessage {
-    fn from_stack(src: &mctp_estack::MctpMessage) -> Self {
-        let mut m = Self {
-            source: src.source,
-            dest: src.dest,
-            tag: src.tag,
-            typ: src.typ,
-            ic: src.ic,
-            payload: Vec::new(),
-        };
-        m.payload.extend_from_slice(src.payload);
-        m
+impl mctp::AsyncRespChannel for TransportResp<'_> {
+    type ReqChannel<'a> = TransportReq where Self: 'a;
+
+    async fn send_vectored(
+        &mut self,
+        typ: MsgType,
+        integrity_check: bool,
+        bufs: &[&[u8]],
+    ) -> mctp::Result<()> {
+        match self {
+            Self::Serial(s) => {
+                s.send_vectored(typ, integrity_check, bufs).await
+            }
+            Self::Usb(u) => {
+                u.send_vectored(typ, integrity_check, bufs).await
+            }
+        }
+    }
+
+    fn req_channel(&self) -> mctp::Result<Self::ReqChannel<'_>> {
+        todo!();
+    }
+
+    fn remote_eid(&self) -> mctp::Eid {
+        todo!();
     }
 }
 
-async fn run(mut transport: usbredir::MctpUsbRedirListener)
+impl mctp::AsyncReqChannel for TransportReq {
+    async fn send_vectored(&mut self, _: MsgType, _: bool, _: &[&[u8]])
+    -> mctp::Result<()> {
+        unimplemented!()
+    }
+    async fn recv<'f>(&mut self, _: &'f mut [u8])
+    -> mctp::Result<(&'f mut [u8], MsgType, Tag, bool)> {
+        unimplemented!()
+    }
+
+    fn remote_eid(&self) -> Eid {
+        unimplemented!()
+    }
+}
+
+async fn run(mut transport: Transport)
 -> std::io::Result<()> {
     loop {
         let mut rx_buf = [0u8; 4096];
@@ -109,19 +136,18 @@ fn main() -> Result<()> {
     let conf = simplelog::ConfigBuilder::new().build();
     simplelog::SimpleLogger::init(LevelFilter::Debug, conf)?;
 
+    let eid = Eid(9);
+
     let transport = match opts.transport {
         TransportSubcommand::Serial(s) => {
-            /*
-            let serial = serial::MctpSerial::new(&s.tty)?;
+            let serial = serial::MctpSerialListener::new(eid, &s.tty)?;
             info!("Created MCTP Serial transport on {}", s.tty);
             Transport::Serial(serial)
-            */
-            unimplemented!();
         }
         TransportSubcommand::Usb(u) => {
-            let usbredir = usbredir::MctpUsbRedirListener::new(Eid(9), &u.path)?;
+            let usbredir = usbredir::MctpUsbRedirListener::new(eid, &u.path)?;
             info!("Created MCTP USB transport on {}", u.path);
-            usbredir
+            Transport::Usb(usbredir)
         }
     };
 

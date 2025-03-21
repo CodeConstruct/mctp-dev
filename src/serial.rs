@@ -4,19 +4,18 @@ use smol::Async;
 use mctp::{Eid, Tag};
 use mctp_estack::{Stack, SendOutput, serial::MctpSerialHandler};
 use log::{trace, debug};
-use crate::MctpMessage;
 
 use std::time::Instant;
 
 pub struct MctpSerial {
     mctp: mctp_estack::Stack,
+    start_time: Instant,
     mctpserial: MctpSerialHandler,
     serial: FromFutures<Async<std::fs::File>>,
-    start_time: Instant,
 }
 
 impl MctpSerial {
-    pub fn new(tty: &str) -> Result<Self> {
+    pub fn new(eid: mctp::Eid, tty: &str) -> Result<Self> {
 
         let serial = std::fs::OpenOptions::new()
             .write(true)
@@ -28,15 +27,14 @@ impl MctpSerial {
 
         let start_time = Instant::now();
         let mtu = 64;
-        let eid = Eid(9);
         let mctp = Stack::new(eid, mtu, 0);
         let mctpserial = MctpSerialHandler::new();
 
         Ok(Self {
             mctp,
+            start_time,
             mctpserial,
             serial,
-            start_time,
         })
     }
 
@@ -44,52 +42,122 @@ impl MctpSerial {
         self.start_time.elapsed().as_millis() as u64
     }
 
-    pub async fn recv(&mut self) -> Result<MctpMessage> {
+    pub async fn recv(&mut self)
+    -> mctp::Result<(mctp_estack::MctpMessage, mctp_estack::ReceiveHandle)> {
         loop {
             let _ = self.mctp.update(self.now());
 
             let r = self.mctpserial.receive_async(
                 &mut self.serial,
                 &mut self.mctp
-            ).await?;
+            ).await;
 
-            if let Some((_msg, handle)) = r {
+            if let Ok(Some((_msg, handle))) = r {
                 let msg = self.mctp.fetch_message(&handle);
                 trace!("msg: {msg:?}");
-
-                if let Tag::Unowned(_) = msg.tag {
-                    trace!("!TO");
-                    self.mctp.finished_receive(handle);
-                    continue;
-                }
-
-                let res = MctpMessage::from_stack(&msg);
-                self.mctp.finished_receive(handle);
-                return Ok(res)
+                return Ok((msg, handle));
             }
         }
     }
 
-    #[allow(unused)]
-    async fn send(&mut self, msg: MctpMessage) -> Result<()> {
-        let _ = self.mctp.update(self.now());
-        let r = self.mctpserial.send_fill(msg.dest, msg.typ, Some(msg.tag),
-            msg.ic, None, &mut self.serial, &mut self.mctp,
+}
+
+pub struct MctpSerialListener {
+    serial: MctpSerial,
+}
+
+impl MctpSerialListener {
+    pub fn new(eid: mctp::Eid, tty: &str) -> Result<Self> {
+        Ok(Self {
+            serial: MctpSerial::new(eid, tty)?,
+        })
+    }
+}
+
+impl mctp::AsyncListener for MctpSerialListener {
+    type RespChannel<'a> = MctpSerialResp<'a> where Self: 'a;
+
+    async fn recv<'f>(&mut self, buf: &'f mut [u8])
+    -> mctp::Result<(&'f mut [u8], Self::RespChannel<'_>, Tag, mctp::MsgType, bool)> {
+        loop {
+            let (msg, handle) = self.serial.recv().await?;
+
+            if msg.tag.is_owner() {
+                let tag = msg.tag;
+                let ic = msg.ic;
+                let typ = msg.typ;
+                let b = buf.get_mut(..msg.payload.len()).ok_or(mctp::Error::NoSpace)?;
+                b.copy_from_slice(msg.payload);
+                let eid = msg.source;
+                self.serial.mctp.finished_receive(handle);
+                let resp = MctpSerialResp {
+                    eid,
+                    tv: tag.tag(),
+                    serial: &mut self.serial,
+                };
+                return Ok((b, resp, tag, typ, ic));
+            } else {
+                trace!("Discarding unmatched message {msg:?}");
+                self.serial.mctp.finished_receive(handle);
+            }
+
+        }
+    }
+
+}
+
+pub struct MctpSerialResp<'a> {
+    eid: mctp::Eid,
+    tv: mctp::TagValue,
+    serial: &'a mut MctpSerial,
+}
+
+impl mctp::AsyncRespChannel for MctpSerialResp<'_> {
+    type ReqChannel<'a> = MctpSerialReq where Self: 'a;
+
+    async fn send_vectored(
+        &mut self,
+        typ: mctp::MsgType,
+        integrity_check: bool,
+        bufs: &[&[u8]],
+    ) -> mctp::Result<()> {
+        let r = self.serial.mctpserial.send_fill(self.eid, typ,
+            Some(mctp::Tag::Unowned(self.tv)), integrity_check,
+            None, &mut self.serial.serial, &mut self.serial.mctp,
             |v| {
-                let _ = v.extend_from_slice(&msg.payload);
+                for b in bufs {
+                    v.extend_from_slice(b).ok()?
+                }
+                trace!("v len {}", v.len());
                 Some(())
-            });
+            }).await;
 
-        match r.await {
+        match r {
             SendOutput::Packet(_) => unreachable!(),
-            SendOutput::Complete { .. } => {
-                debug!("tx complete");
-                Ok(())
-            }
-            SendOutput::Error { err, .. } => {
-                debug!("tx error {err:?}");
-                Err(err.into())
-            }
+            SendOutput::Complete { .. } => Ok(()),
+            SendOutput::Error { err, .. } => Err(err.into()),
         }
     }
+
+    fn req_channel(&self) -> mctp::Result<Self::ReqChannel<'_>> {
+        todo!();
+    }
+
+    fn remote_eid(&self) -> mctp::Eid {
+        todo!();
+    }
+}
+
+pub struct MctpSerialReq {
+}
+
+impl mctp::AsyncReqChannel for MctpSerialReq {    
+    async fn send_vectored(&mut self, _: mctp::MsgType, _: bool, _: &[&[u8]])
+    -> mctp::Result<()> {
+        todo!()
+    }
+    async fn recv<'f>(&mut self, _: &'f mut [u8])
+    -> mctp::Result<(&'f mut [u8], mctp::MsgType, Tag, bool)> { todo!() }
+
+    fn remote_eid(&self) -> Eid { todo!() }
 }
