@@ -122,8 +122,7 @@ async fn run(mut transport: Transport)
         match typ.0 {
             0 => (),
             1 => {
-                let r = resp.send(typ, buf).await?;
-                info!("send res: {r:?}");
+                let _ = resp.send(typ, buf).await?;
             },
             _ => (),
         }
@@ -138,20 +137,25 @@ fn main() -> Result<()> {
 
     let eid = Eid(9);
 
-    let transport = match opts.transport {
+    match opts.transport {
         TransportSubcommand::Serial(s) => {
             let serial = serial::MctpSerialListener::new(eid, &s.tty)?;
             info!("Created MCTP Serial transport on {}", s.tty);
-            Transport::Serial(serial)
+            let t = Transport::Serial(serial);
+            let _ = smol::block_on(run(t));
+
         }
         TransportSubcommand::Usb(u) => {
-            let usbredir = usbredir::MctpUsbRedirListener::new(eid, &u.path)?;
+            let (transport, mut port) = usbredir::MctpUsbRedir::new(eid, &u.path)?;
+            let l = usbredir::MctpUsbRedirListener::new(transport);
             info!("Created MCTP USB transport on {}", u.path);
-            Transport::Usb(usbredir)
+            let fut = futures::future::join(
+                port.process(),
+                run(Transport::Usb(l))
+            );
+            let _ = smol::block_on(fut);
         }
     };
-
-    smol::block_on(run(transport))?;
 
     Ok(())
 }

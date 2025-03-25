@@ -7,9 +7,10 @@ use std::time::Instant;
 use log::{debug, info, trace, warn};
 use usbredirparser::{self, Parser};
 use std::io::{Read as _, Write as _};
-use futures::{FutureExt, select};
+use futures::{FutureExt, select, future};
+use std::collections::VecDeque;
 
-struct Handler {
+struct UsbRedirHandler {
     stream: std::fs::File,
     out_chan: async_channel::Sender<Vec<u8>>,
     in_chan: async_channel::Sender<(u64, usbredirparser::BulkPacket)>,
@@ -23,18 +24,35 @@ const USB_CTRL_GET_DESCRIPTOR: u8 = 6;
 const EP_ADDR_OUT: u8 = 0x01;
 const EP_ADDR_IN: u8 = 0x81;
 
+/* contains the usbredir state, and handles async processing */
+pub struct MctpUsbRedirPort {
+    parser: Box<usbredirparser::Parser>,
+    stream: smol::Async<std::fs::File>,
+    in_xfer_queue: VecDeque<(u64, usbredirparser::BulkPacket)>,
+
+    /* usbredir interactions, connected to the usbredir handler. We use a
+     * channel for this as the handler object gets stashed away within the
+     * usbredirparser callback API
+     */
+    redir_out_chan: async_channel::Receiver<Vec<u8>>,
+    redir_in_chan: async_channel::Receiver<(u64, usbredirparser::BulkPacket)>,
+
+    /* usb transfer interactions, connected to the higher-level objects */
+    xfer_tx_chan: async_channel::Receiver<Vec<u8>>,
+    xfer_rx_chan: async_channel::Sender<Vec<u8>>,
+}
+
 #[allow(unused)]
 pub struct MctpUsbRedir {
     mctp: mctp_estack::Stack,
-    mctpusb: MctpUsbHandler,
     start_time: Instant,
-    parser: Box<usbredirparser::Parser>,
-    stream: smol::Async<std::fs::File>,
-    usb_out_chan: async_channel::Receiver<Vec<u8>>,
-    usb_in_chan: async_channel::Receiver<(u64, usbredirparser::BulkPacket)>,
+    mctpusb: MctpUsbHandler,
+
+    xfer_tx_chan: async_channel::Sender<Vec<u8>>,
+    xfer_rx_chan: async_channel::Receiver<Vec<u8>>,
 }
 
-impl usbredirparser::ParserHandler for Handler {
+impl usbredirparser::ParserHandler for UsbRedirHandler {
     fn read(&mut self, _parser: &Parser, buf: &mut [u8]) -> std::io::Result<usize> {
         let res = self.stream.read(buf);
         trace!("read:in:{:x?}", buf);
@@ -210,7 +228,7 @@ const STRING_LANGS : [u8; 4] = [
     0x09, 0x04, /* en */
 ];
 
-impl Handler {
+impl UsbRedirHandler {
     fn control_get_descriptor(
         &mut self,
         parser: &Parser,
@@ -304,7 +322,8 @@ impl Handler {
 
 impl MctpUsbRedir {
 
-    pub fn new(own_eid: mctp::Eid, path: &str) -> Result<Self> {
+    pub fn new(own_eid: mctp::Eid, path: &str)
+    -> Result<(Self, MctpUsbRedirPort)> {
         let fd = std::fs::OpenOptions::new()
             .write(true)
             .read(true)
@@ -317,91 +336,55 @@ impl MctpUsbRedir {
         let mctp = Stack::new(eid, mtu, 0);
 
         let fd2 = fd.try_clone()?;
-        let (out_sender, out_receiver) = async_channel::unbounded();
-        let (in_sender, in_receiver) = async_channel::unbounded();
+        let (redir_out_sender, redir_out_receiver) = async_channel::unbounded();
+        let (redir_in_sender, redir_in_receiver) = async_channel::unbounded();
 
-        let handler = Handler {
-            out_chan: out_sender,
-            in_chan: in_sender,
+        let handler = UsbRedirHandler {
+            out_chan: redir_out_sender,
+            in_chan: redir_in_sender,
             stream: fd
         };
         let parser = usbredirparser::Parser::new(handler);
 
-        Ok(Self {
+        let (xfer_out_sender, xfer_out_receiver) = async_channel::unbounded();
+        let (xfer_in_sender, xfer_in_receiver) = async_channel::unbounded();
+        let port = MctpUsbRedirPort {
+            parser,
+            stream: smol::Async::new(fd2)?,
+            in_xfer_queue: VecDeque::new(),
+            redir_out_chan: redir_out_receiver,
+            redir_in_chan: redir_in_receiver,
+            xfer_rx_chan: xfer_out_sender,
+            xfer_tx_chan: xfer_in_receiver,
+        };
+
+        Ok((Self {
             mctp,
             mctpusb: MctpUsbHandler::new(),
             start_time,
-            parser,
-            stream: smol::Async::new(fd2)?,
-            usb_out_chan: out_receiver,
-            usb_in_chan: in_receiver,
-        })
+            xfer_tx_chan: xfer_in_sender,
+            xfer_rx_chan: xfer_out_receiver,
+        }, port))
     }
 
     fn now(&self) -> u64 {
         self.start_time.elapsed().as_millis() as u64
     }
 
-    pub fn disconnect(&mut self) {
-        self.parser.send_device_disconnect();
-
-        while self.parser.has_data_to_write() != 0 {
-            let res = self.parser.do_write();
-            match res {
-                Err(e) => {
-                    warn!("write error {e:?}");
-                    break;
-                }
-                Ok(_) => (),
-            }
-        }
-    }
-
     pub async fn recv(&mut self)
     -> mctp::Result<(mctp_estack::MctpMessage, mctp_estack::ReceiveHandle)> {
         loop {
-            select!(
-                r = self.stream.readable().fuse() => {
-                    if let Err(e) = r {
-                        warn!("io error {e:?}");
-                        break Err(mctp::Error::RxFailure);
-                    }
-
-                    let res = self.parser.do_read();
-                    match res {
-                        Err(e) => {
-                            warn!("parse error {e:?}");
-                            break Err(mctp::Error::RxFailure);
-                        }
-                        Ok(_) => (),
-                    }
-
-                },
-                r = self.usb_out_chan.recv().fuse() => {
-                    trace!("out_chan: {r:?}");
-
-                    let _ = self.mctp.update(self.now());
-                    if let Ok(data) = r {
-                        let m = MctpUsbHandler::receive(
-                            data.as_slice(),
-                            &mut self.mctp,
-                        );
-                        if let Ok(Some((_msg, handle))) = m {
-                            let msg = self.mctp.fetch_message(&handle);
-                            debug!("msg: {msg:?}");
-                            return Ok((msg, handle));
-                        }
-                    }
-                }
-            );
-            if self.parser.has_data_to_write() != 0 {
-                let res = self.parser.do_write();
-                match res {
-                    Err(e) => {
-                        warn!("write error {e:?}");
-                        break Err(mctp::Error::RxFailure);
-                    }
-                    Ok(_) => (),
+            let r = self.xfer_rx_chan.recv().await;
+            let _ = self.mctp.update(self.now());
+            if let Ok(data) = r {
+                let m = MctpUsbHandler::receive(
+                    data.as_slice(),
+                    &mut self.mctp,
+                );
+                if let Ok(Some((_msg, handle))) = m {
+                    let msg = self.mctp.fetch_message(&handle);
+                    debug!("msg: {msg:?}");
+                    return Ok((msg, handle));
                 }
             }
         }
@@ -422,8 +405,7 @@ impl MctpUsbRedir {
             buf.extend_from_slice(b);
         }
         let mut xfer = MctpUsbRedirXfer {
-            parser: &self.parser,
-            chan: &self.usb_in_chan,
+            chan: &self.xfer_tx_chan,
         };
         let r = self.mctpusb.send_fill(eid, typ,
             tag, integrity_check, cookie,
@@ -445,19 +427,98 @@ impl MctpUsbRedir {
     }
 }
 
+impl MctpUsbRedirPort {
+
+    async fn process_one(&mut self) -> mctp::Result<()> {
+        // we only poll on the tx future (outgoing USB transfers from the MCTP
+        // stack) if we have a usbredir IN transfer queued and ready to go.
+        let tx_fut = if self.in_xfer_queue.is_empty() {
+            future::Either::Left(future::pending())
+        } else {
+            future::Either::Right(self.xfer_tx_chan.recv())
+        };
+
+        select!(
+            // socket activity
+            r = self.stream.readable().fuse() => {
+                if let Err(e) = r {
+                    warn!("io error {e:?}");
+                    return Err(mctp::Error::RxFailure);
+                }
+
+                let res = self.parser.do_read();
+                match res {
+                    Err(e) => {
+                        warn!("parse error {e:?}");
+                        return Err(mctp::Error::RxFailure);
+                    }
+                    Ok(_) => (),
+                }
+            },
+
+            // tx from redir
+            r = self.redir_out_chan.recv().fuse() => {
+                if let Ok(xfer) = r {
+                    let _ = self.xfer_rx_chan.send(xfer).await;
+                }
+            }
+
+            // rx from redir
+            r = self.redir_in_chan.recv().fuse() => {
+                if let Ok((id, pkt)) = r {
+                    self.in_xfer_queue.push_back((id, pkt));
+                }
+            }
+
+            // tx from MCTP stack
+            r = tx_fut.fuse() => {
+                if let Ok(xfer) = r {
+                    // unwrap(): we have already confirmed we have an entry in
+                    // the in_xfer_queue
+                    let (id, mut pkt) = self.in_xfer_queue.pop_front().unwrap();
+
+                    pkt.status = usbredirparser::STATUS_SUCCESS;
+                    pkt.length = xfer.len() as u16;
+
+                    self.parser.send_bulk_packet(id, &pkt, &xfer);
+                } else {
+                    warn!("tx/xfer failure: {r:?}");
+                    return Err(mctp::Error::TxFailure);
+                }
+
+            }
+        );
+
+        while self.parser.has_data_to_write() != 0 {
+            let res = self.parser.do_write();
+            match res {
+                Err(e) => {
+                    warn!("write error {e:?}");
+                    break;
+                }
+                Ok(_) => (),
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn process(&mut self) -> mctp::Result<()> {
+        loop {
+            self.process_one().await?
+        }
+
+    }
+}
+
 pub struct MctpUsbRedirListener {
     usb: MctpUsbRedir,
 }
 
 impl MctpUsbRedirListener {
-    pub fn new(own_eid: mctp::Eid, path: &str) -> Result<Self> {
-        Ok(Self {
-            usb: MctpUsbRedir::new(own_eid, path)?,
-        })
-    }
-
-    pub fn disconnect(&mut self) {
-        self.usb.disconnect();
+    pub fn new(usb: MctpUsbRedir) -> Self {
+        Self {
+            usb,
+        }
     }
 }
 
@@ -506,8 +567,7 @@ impl mctp::AsyncRespChannel for MctpUsbRedirResp<'_> {
         let _ = self.usb.mctp.update(self.usb.now());
         let cookie = None;
         let mut xfer = MctpUsbRedirXfer {
-            parser: &self.usb.parser,
-            chan: &self.usb.usb_in_chan,
+            chan: &self.usb.xfer_tx_chan,
         };
         let r = self.usb.mctpusb.send_fill(self.eid, typ,
             Some(mctp::Tag::Unowned(self.tv)), integrity_check, cookie,
@@ -564,19 +624,18 @@ impl mctp::AsyncListener for MctpUsbRedirListener {
     }
 }
 
-/*
- * Facility for sending through the MctpUsbXfer trait. We split the
- * parser and channel out of the core MctpUsbRedir to satisfy borrow
- * rules
- */
 struct MctpUsbRedirXfer<'a> {
-    parser: &'a usbredirparser::Parser,
-    chan: &'a async_channel::Receiver<(u64, usbredirparser::BulkPacket)>,
+    chan: &'a async_channel::Sender<Vec<u8>>,
 }
 
 impl MctpUsbXfer for MctpUsbRedirXfer<'_> {
     fn send_xfer(&mut self, buf: &[u8]) -> mctp::Result<()> {
-        debug!("USB pkt xfer: {buf:x?}");
+        // todo: async xfer trait?
+        let x = self.chan.send_blocking(buf.to_vec());
+        Ok(())
+    }
+
+    /*
         let res = self.chan.try_recv();
         let (id, mut pkt) = match res {
             Err(_) => {
@@ -604,4 +663,5 @@ impl MctpUsbXfer for MctpUsbRedirXfer<'_> {
 
         Ok(())
     }
+    */
 }
