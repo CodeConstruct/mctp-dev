@@ -21,3 +21,4 @@ usbredirparser = { git = "https://github.com/CodeConstruct/usbredir-rs", branch 
 polling = "3.7.4"
 futures = "0.3.31"
 async-channel = "2.3.1"
+critical-section = { version = "1.2.0", features = ["std"] }

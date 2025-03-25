@@ -1,8 +1,6 @@
 
 use anyhow::{Context, Result};
-use mctp::Eid;
 use mctp_estack::{Stack, SendOutput, usb::MctpUsbHandler, usb::MctpUsbXfer};
-use std::time::Instant;
 #[allow(unused_imports)]
 use log::{debug, info, trace, warn};
 use usbredirparser::{self, Parser};
@@ -24,6 +22,8 @@ const USB_CTRL_GET_DESCRIPTOR: u8 = 6;
 const EP_ADDR_OUT: u8 = 0x01;
 const EP_ADDR_IN: u8 = 0x81;
 
+const USB_XFER_SIZE: usize = 512;
+
 /* contains the usbredir state, and handles async processing */
 pub struct MctpUsbRedirPort {
     parser: Box<usbredirparser::Parser>,
@@ -44,9 +44,11 @@ pub struct MctpUsbRedirPort {
 
 #[allow(unused)]
 pub struct MctpUsbRedir {
-    mctp: mctp_estack::Stack,
-    start_time: Instant,
+    // mctp: mctp_estack::Stack,
+    // start_time: Instant,
     mctpusb: MctpUsbHandler,
+    rx_buf: [u8; USB_XFER_SIZE],
+    rx_remain: std::ops::Range<usize>,
 
     xfer_tx_chan: async_channel::Sender<Vec<u8>>,
     xfer_rx_chan: async_channel::Receiver<Vec<u8>>,
@@ -322,18 +324,12 @@ impl UsbRedirHandler {
 
 impl MctpUsbRedir {
 
-    pub fn new(own_eid: mctp::Eid, path: &str)
-    -> Result<(Self, MctpUsbRedirPort)> {
+    pub fn new(path: &str) -> Result<(Self, MctpUsbRedirPort)> {
         let fd = std::fs::OpenOptions::new()
             .write(true)
             .read(true)
             .open(path)
             .context("Can't open tty device")?;
-
-        let start_time = Instant::now();
-        let mtu = 64;
-        let eid = own_eid;
-        let mctp = Stack::new(eid, mtu, 0);
 
         let fd2 = fd.try_clone()?;
         let (redir_out_sender, redir_out_receiver) = async_channel::unbounded();
@@ -359,71 +355,49 @@ impl MctpUsbRedir {
         };
 
         Ok((Self {
-            mctp,
             mctpusb: MctpUsbHandler::new(),
-            start_time,
+            rx_buf: [0u8; USB_XFER_SIZE ],
+            rx_remain: std::ops::Range { start: 0, end: 0 },
             xfer_tx_chan: xfer_in_sender,
             xfer_rx_chan: xfer_out_receiver,
         }, port))
     }
 
-    fn now(&self) -> u64 {
-        self.start_time.elapsed().as_millis() as u64
-    }
+    pub async fn recv(&mut self) -> mctp::Result<&[u8]> {
+        if self.rx_remain.is_empty() {
+            let r = self.xfer_rx_chan.recv().await
+                .or(Err(mctp::Error::RxFailure))?;
+            let len = r.len();
+            if len > self.rx_buf.len() {
+                return Err(mctp::Error::RxFailure);
+            }
+            self.rx_buf.split_at_mut(len).0.clone_from_slice(&r);
+            self.rx_remain = std::ops::Range { start: 0, end: len };
+        }
 
-    pub async fn recv(&mut self)
-    -> mctp::Result<(mctp_estack::MctpMessage, mctp_estack::ReceiveHandle)> {
-        loop {
-            let r = self.xfer_rx_chan.recv().await;
-            let _ = self.mctp.update(self.now());
-            if let Ok(data) = r {
-                let m = MctpUsbHandler::receive(
-                    data.as_slice(),
-                    &mut self.mctp,
-                );
-                if let Ok(Some((_msg, handle))) = m {
-                    let msg = self.mctp.fetch_message(&handle);
-                    debug!("msg: {msg:?}");
-                    return Ok((msg, handle));
-                }
+        let data = &self.rx_buf[self.rx_remain.clone()];
+        match MctpUsbHandler::decode(data) {
+            Ok((pkt, rem)) => {
+                self.rx_remain.start = self.rx_remain.end - rem.len();
+                Ok(pkt)
+            }
+            Err(_) => {
+                self.rx_remain = std::ops::Range { start: 0, end: 0 };
+                Err(mctp::Error::RxFailure)
             }
         }
+
     }
 
-    async fn send_vectored(
-        &mut self,
-        eid: Eid,
-        typ: mctp::MsgType,
-        tag: Option<mctp::Tag>,
-        integrity_check: bool,
-        bufs: &[&[u8]],
-    ) -> Result<mctp::Tag> {
-        let _ = self.mctp.update(self.now());
-        let cookie = None;
-        let mut buf = Vec::new();
-        for b in bufs {
-            buf.extend_from_slice(b);
-        }
-        let mut xfer = MctpUsbRedirXfer {
-            chan: &self.xfer_tx_chan,
-        };
-        let r = self.mctpusb.send_fill(eid, typ,
-            tag, integrity_check, cookie,
-            &mut xfer, &mut self.mctp,
-            |v| {
-                for b in bufs {
-                    v.extend_from_slice(b).ok()?
-                }
-                trace!("v len {}", v.len());
-                Some(())
-            });
-
-
-        match r {
-            SendOutput::Packet(_) => unreachable!(),
-            SendOutput::Complete { tag, .. } => Ok(tag),
-            SendOutput::Error { err, .. } => Err(err.into()),
-        }
+    pub async fn send(&mut self, pkt: &[u8]) -> mctp::Result<()> {
+        let total = pkt.len().checked_add(4).ok_or(mctp::Error::NoSpace)?;
+        let mut tx_buf = Vec::with_capacity(total);
+        let mut hdr = [0u8; 4];
+        MctpUsbHandler::header(pkt.len(), &mut hdr)?;
+        tx_buf.extend_from_slice(&hdr);
+        tx_buf.extend_from_slice(&pkt);
+        self.xfer_tx_chan.send(tx_buf).await.or(Err(mctp::Error::TxFailure))?;
+        Ok(())
     }
 }
 
@@ -508,160 +482,4 @@ impl MctpUsbRedirPort {
         }
 
     }
-}
-
-pub struct MctpUsbRedirListener {
-    usb: MctpUsbRedir,
-}
-
-impl MctpUsbRedirListener {
-    pub fn new(usb: MctpUsbRedir) -> Self {
-        Self {
-            usb,
-        }
-    }
-}
-
-pub struct MctpUsbRedirReq {
-    usb: MctpUsbRedir,
-    eid: mctp::Eid,
-    sent_tv: Option<mctp::TagValue>,
-    timeout: Option<core::time::Duration>
-}
-
-impl mctp::AsyncReqChannel for MctpUsbRedirReq {
-    fn remote_eid(&self) -> mctp::Eid {
-        return self.eid
-    }
-    async fn recv<'f>(
-        &mut self,
-        _buf: &'f mut [u8],
-    ) -> mctp::Result<(&'f mut [u8], mctp::MsgType, mctp::Tag, bool)> {
-        todo!();
-    }
-    async fn send_vectored(
-        &mut self,
-        _typ: mctp::MsgType,
-        _integrity_check: bool,
-        _bufs: &[&[u8]],
-    ) -> mctp::Result<()> {
-        todo!();
-    }
-}
-
-pub struct MctpUsbRedirResp<'a> {
-    eid: mctp::Eid,
-    tv: mctp::TagValue,
-    usb: &'a mut MctpUsbRedir,
-}
-
-impl mctp::AsyncRespChannel for MctpUsbRedirResp<'_> {
-    type ReqChannel<'a> = MctpUsbRedirReq where Self: 'a;
-
-    async fn send_vectored(
-        &mut self,
-        typ: mctp::MsgType,
-        integrity_check: bool,
-        bufs: &[&[u8]],
-    ) -> mctp::Result<()> {
-        let _ = self.usb.mctp.update(self.usb.now());
-        let cookie = None;
-        let mut xfer = MctpUsbRedirXfer {
-            chan: &self.usb.xfer_tx_chan,
-        };
-        let r = self.usb.mctpusb.send_fill(self.eid, typ,
-            Some(mctp::Tag::Unowned(self.tv)), integrity_check, cookie,
-            &mut xfer, &mut self.usb.mctp,
-            |v| {
-                for b in bufs {
-                    v.extend_from_slice(b).ok()?
-                }
-                trace!("v len {}", v.len());
-                Some(())
-            });
-
-        match r {
-            SendOutput::Packet(_) => unreachable!(),
-            SendOutput::Complete { .. } => Ok(()),
-            SendOutput::Error { err, .. } => Err(err),
-        }
-    }
-    fn req_channel(&self) -> mctp::Result<Self::ReqChannel<'_>> {
-        todo!();
-    }
-    fn remote_eid(&self) -> mctp::Eid {
-        todo!();
-    }
-}
-
-impl mctp::AsyncListener for MctpUsbRedirListener {
-    type RespChannel<'a> = MctpUsbRedirResp<'a> where Self: 'a;
-
-    async fn recv<'f>(&mut self, buf: &'f mut [u8])
-    -> mctp::Result<(&'f mut [u8], Self::RespChannel<'_>, mctp::Tag, mctp::MsgType, bool)> {
-        loop {
-            let (msg, handle) = self.usb.recv().await?;
-
-            if msg.tag.is_owner() {
-                let tag = msg.tag;
-                let ic = msg.ic;
-                let typ = msg.typ;
-                let b = buf.get_mut(..msg.payload.len()).ok_or(mctp::Error::NoSpace)?;
-                b.copy_from_slice(msg.payload);
-                let eid = msg.source;
-                self.usb.mctp.finished_receive(handle);
-                let resp = MctpUsbRedirResp {
-                    eid,
-                    tv: tag.tag(),
-                    usb: &mut self.usb,
-                };
-                return Ok((b, resp, tag, typ, ic));
-            } else {
-                trace!("Discarding unmatched message {msg:?}");
-                self.usb.mctp.finished_receive(handle);
-            }
-        }
-    }
-}
-
-struct MctpUsbRedirXfer<'a> {
-    chan: &'a async_channel::Sender<Vec<u8>>,
-}
-
-impl MctpUsbXfer for MctpUsbRedirXfer<'_> {
-    fn send_xfer(&mut self, buf: &[u8]) -> mctp::Result<()> {
-        // todo: async xfer trait?
-        let x = self.chan.send_blocking(buf.to_vec());
-        Ok(())
-    }
-
-    /*
-        let res = self.chan.try_recv();
-        let (id, mut pkt) = match res {
-            Err(_) => {
-                debug!("no in urb available");
-                return Err(mctp::Error::TxFailure);
-            }
-            Ok(p) => p,
-        };
-
-        pkt.status = usbredirparser::STATUS_SUCCESS;
-        pkt.length = buf.len() as u16;
-
-        let r = self.parser.send_bulk_packet(id, &pkt, buf);
-
-        if self.parser.has_data_to_write() != 0 {
-            let res = self.parser.do_write();
-            match res {
-                Err(e) => {
-                    warn!("write error {e:?}");
-                    return Err(mctp::Error::RxFailure.into());
-                }
-                Ok(_) => (),
-            }
-        }
-
-        Ok(())
-    }
-    */
 }

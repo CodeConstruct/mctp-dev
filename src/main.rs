@@ -1,8 +1,13 @@
+#![allow(unused_imports)]
 
 use anyhow::Result;
 use argh::FromArgs;
-use log::{LevelFilter, info};
+use log::{LevelFilter, info, debug};
+use futures::{FutureExt, select, future, join};
 use mctp::{AsyncListener, AsyncRespChannel};
+use mctp_estack::routing::{
+    PortBuilder, PortLookup, PortStorage, Router, PortId, PortBottom,
+};
 
 use mctp::{Eid,Tag,MsgType};
 
@@ -43,91 +48,73 @@ struct UsbRedirSubcommand {
 }
 
 enum Transport {
-    Serial(serial::MctpSerialListener),
-    Usb(usbredir::MctpUsbRedirListener),
+    Serial(serial::MctpSerial),
+    Usb(usbredir::MctpUsbRedir),
 }
-
-enum TransportResp<'a> {
-    Serial(serial::MctpSerialResp<'a>),
-    Usb(usbredir::MctpUsbRedirResp<'a>),
-}
-
-struct TransportReq { }
 
 impl Transport {
-    async fn recv<'f>(&mut self, rx_buf: &'f mut [u8])
-    -> mctp::Result<(&'f mut [u8], TransportResp, Tag, MsgType, bool)> {
+    async fn recv(&mut self) -> mctp::Result<&[u8]> {
         match self {
-            Self::Serial(s) => {
-                let (buf, resp, tag, typ, ic) = s.recv(rx_buf).await?;
-                Ok((buf, TransportResp::Serial(resp), tag, typ, ic))
-            }
-            Self::Usb(u) => {
-                let (buf, resp, tag, typ, ic) = u.recv(rx_buf).await?;
-                Ok((buf, TransportResp::Usb(resp), tag, typ, ic))
-            }
+            Self::Serial(s) => s.recv().await,
+            Self::Usb(u) => u.recv().await,
+        }
+    }
+
+    async fn send(&mut self, pkt: &[u8]) -> mctp::Result<()> {
+        match self {
+            Self::Serial(s) => s.send(pkt).await,
+            Self::Usb(u) => u.send(pkt).await,
         }
     }
 }
 
-impl mctp::AsyncRespChannel for TransportResp<'_> {
-    type ReqChannel<'a> = TransportReq where Self: 'a;
+struct Routes {
+}
 
-    async fn send_vectored(
-        &mut self,
-        typ: MsgType,
-        integrity_check: bool,
-        bufs: &[&[u8]],
-    ) -> mctp::Result<()> {
-        match self {
-            Self::Serial(s) => {
-                s.send_vectored(typ, integrity_check, bufs).await
-            }
-            Self::Usb(u) => {
-                u.send_vectored(typ, integrity_check, bufs).await
-            }
-        }
-    }
-
-    fn req_channel(&self) -> mctp::Result<Self::ReqChannel<'_>> {
-        todo!();
-    }
-
-    fn remote_eid(&self) -> mctp::Eid {
-        todo!();
+impl PortLookup for Routes {
+    fn by_eid(&mut self, _eid: Eid, _source_port: Option<PortId>) -> Option<PortId> {
+        return Some(PortId(0))
     }
 }
 
-impl mctp::AsyncReqChannel for TransportReq {
-    async fn send_vectored(&mut self, _: MsgType, _: bool, _: &[&[u8]])
-    -> mctp::Result<()> {
-        unimplemented!()
-    }
-    async fn recv<'f>(&mut self, _: &'f mut [u8])
-    -> mctp::Result<(&'f mut [u8], MsgType, Tag, bool)> {
-        unimplemented!()
-    }
 
-    fn remote_eid(&self) -> Eid {
-        unimplemented!()
-    }
-}
-
-async fn run(mut transport: Transport)
--> std::io::Result<()> {
+async fn run<'a>(
+    mut transport: Transport,
+    mut port: PortBottom<'_>,
+    router: &'a Router<'a>,
+) -> std::io::Result<()> {
+    let portid = PortId(0);
     loop {
-        let mut rx_buf = [0u8; 4096];
-        let (buf, mut resp, tag, typ, _ic) = transport.recv(&mut rx_buf).await?;
-        info!("msg: {:?}", (&buf, tag, typ));
-        match typ.0 {
-            0 => (),
-            1 => {
-                let _ = resp.send(typ, buf).await?;
-            },
-            _ => (),
+        select!(
+            r = transport.recv().fuse() => {
+                if let Ok(pkt) = r {
+                    router.receive(pkt, portid).await;
+                }
+            }
+            (pkt, _dest) = port.receive().fuse() => {
+                let _ = transport.send(pkt).await;
+                port.receive_done();
+            }
+        );
+    }
+}
+
+async fn echo<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
+    let mut l = router.listener(MsgType(1))?;
+
+    info!("echo server listening");
+    let mut buf = [0u8; 100];
+    loop {
+        let Ok((msg, mut resp, _tag, typ, _ic)) = l.recv(&mut buf).await else {
+            continue;
+        };
+
+        if let Err(_e) = resp.send(typ, msg).await {
+            debug!("listener reply fail");
         }
     }
 }
+
 
 fn main() -> Result<()> {
     let opts : Options = argh::from_env();
@@ -136,26 +123,49 @@ fn main() -> Result<()> {
     simplelog::SimpleLogger::init(LevelFilter::Debug, conf)?;
 
     let eid = Eid(9);
+    let mtu = 68usize;
 
-    match opts.transport {
+    let mut port_storage = PortStorage::<4>::new();
+    let mut port = PortBuilder::new(&mut port_storage);
+    let (port_top, port_bottom) = port.build(mtu).unwrap();
+    let ports = [
+        port_top,
+    ];
+
+    let stack = mctp_estack::Stack::new(
+        eid,
+        mtu,
+        0u64, /* todo: time */
+    );
+
+    let mut routes = Routes { };
+    let router = Router::new(stack, &ports, &mut routes);
+
+    let (transport, mut port) = match opts.transport {
         TransportSubcommand::Serial(s) => {
-            let serial = serial::MctpSerialListener::new(eid, &s.tty)?;
+            let serial = serial::MctpSerial::new(&s.tty)?;
             info!("Created MCTP Serial transport on {}", s.tty);
             let t = Transport::Serial(serial);
-            let _ = smol::block_on(run(t));
-
+            (t, None)
         }
         TransportSubcommand::Usb(u) => {
-            let (transport, mut port) = usbredir::MctpUsbRedir::new(eid, &u.path)?;
-            let l = usbredir::MctpUsbRedirListener::new(transport);
+            let (usbredir, port) = usbredir::MctpUsbRedir::new(&u.path)?;
             info!("Created MCTP USB transport on {}", u.path);
-            let fut = futures::future::join(
-                port.process(),
-                run(Transport::Usb(l))
-            );
-            let _ = smol::block_on(fut);
+            let t = Transport::Usb(usbredir);
+            (t, Some(port))
         }
     };
+
+    let fut = match port {
+        Some(ref mut p) => futures::future::Either::Left(p.process()),
+        None => futures::future::Either::Right(futures::future::pending()),
+    };
+
+    let _ = smol::block_on(async { join!(
+        fut,
+        run(transport, port_bottom, &router),
+        echo(&router),
+    )});
 
     Ok(())
 }
