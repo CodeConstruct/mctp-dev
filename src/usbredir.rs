@@ -454,6 +454,7 @@ impl MctpUsbRedirPort {
                     pkt.status = usbredirparser::STATUS_SUCCESS;
                     pkt.length = xfer.len() as u16;
 
+                    debug!("tx xfer: {xfer:02x?}");
                     self.parser.send_bulk_packet(id, &pkt, &xfer);
                 } else {
                     warn!("tx/xfer failure: {r:?}");

@@ -115,6 +115,28 @@ async fn echo<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
     }
 }
 
+async fn control<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
+    let mut l = router.listener(mctp::MCTP_TYPE_CONTROL)?;
+    let mut c = mctp_estack::control::MctpControl::new(router);
+    let u = uuid::Uuid::new_v4();
+
+    let _ = c.set_message_types(&[mctp::MCTP_TYPE_CONTROL]);
+    c.set_uuid(&u);
+
+    info!("MCTP Control Protocol server listening");
+    let mut buf = [0u8; 256];
+    loop {
+        let Ok((msg, resp, _tag, _typ, _ic)) = l.recv(&mut buf).await else {
+            continue;
+        };
+
+        let r = c.handle_async(msg, resp).await;
+
+        if let Err(e) = r {
+            info!("control handler failure: {e}");
+        }
+    }
+}
 
 fn main() -> Result<()> {
     let opts : Options = argh::from_env();
@@ -122,7 +144,7 @@ fn main() -> Result<()> {
     let conf = simplelog::ConfigBuilder::new().build();
     simplelog::SimpleLogger::init(LevelFilter::Debug, conf)?;
 
-    let eid = Eid(9);
+    let eid = Eid(0);
     let mtu = 68usize;
 
     let mut port_storage = PortStorage::<4>::new();
@@ -165,6 +187,7 @@ fn main() -> Result<()> {
         fut,
         run(transport, port_bottom, &router),
         echo(&router),
+        control(&router),
     )});
 
     Ok(())
