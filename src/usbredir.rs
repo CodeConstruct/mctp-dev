@@ -70,8 +70,7 @@ impl usbredirparser::ParserHandler for UsbRedirHandler {
     fn write(&mut self, _parser: &Parser, buf: &[u8]) -> std::io::Result<usize> {
         self.stream.write(buf)
     }
-    fn hello(&mut self, parser: &Parser, hello: &usbredirparser::Hello) {
-        debug!("hello: {:?}", hello.version);
+    fn hello(&mut self, parser: &Parser, _hello: &usbredirparser::Hello) {
         self.send_config(parser);
 
         let chdr = usbredirparser::DeviceConnect {
