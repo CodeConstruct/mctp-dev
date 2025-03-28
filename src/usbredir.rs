@@ -166,9 +166,9 @@ const DEV_DESC : [u8; 18] = [
     0x00, /* bDeviceSubClass */
     0x00, /* bDeviceProtocol */
     0x40, /* bMaxPacketSize0 */
-    0x00, 0xcc, /* idVendor */
-    0x00, 0xcc, /* idProduct */
-    0x13, 0x06, /* bcdDevice */
+    0x00, 0x00, /* idVendor */
+    0x00, 0x00, /* idProduct */
+    0x00, 0x00, /* bcdDevice */
     0x01, /* iManufacturer */
     0x02, /* iProduct */
     0x03, /* iSerialNumber */
@@ -219,7 +219,7 @@ const EP_DESCS : [[u8; 7]; 2] = [
 ];
 
 const STRINGS : &[&str] = &[
-    "Code Construct",
+    "mctp-dev",
     "MCTP over USB device",
     "sn0000",
     "MCTP over USB",
