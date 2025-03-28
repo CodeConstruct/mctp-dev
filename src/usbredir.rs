@@ -241,7 +241,7 @@ impl UsbRedirHandler {
         let mut resp = usbredirparser::ControlPacket { ..*req };
         let (desc_type, desc_idx) : (u8, u8) = (
             ((req.value >> 8) & 0xff) as u8,
-            ((req.value >> 0) & 0xff) as u8
+            ((req.value     ) & 0xff) as u8
         );
         debug!("desc request for type {desc_type:02x} idx {desc_idx:02x}");
         let mut v = Vec::new();
@@ -271,8 +271,8 @@ impl UsbRedirHandler {
                 v.extend_from_slice(&EP_DESCS[1]);
                 /* set total length */
                 let len = v.len() as u16;
-                v[3] = (len >> 8) as u8 & 0xff;
-                v[2] = (len >> 0) as u8 & 0xff;
+                v[3] = ((len >> 8) & 0xff) as u8;
+                v[2] = ((len     ) & 0xff) as u8;
                 v.as_slice()
             }
             _ => {
@@ -399,7 +399,7 @@ impl MctpUsbRedir {
         let mut hdr = [0u8; 4];
         MctpUsbHandler::header(pkt.len(), &mut hdr)?;
         tx_buf.extend_from_slice(&hdr);
-        tx_buf.extend_from_slice(&pkt);
+        tx_buf.extend_from_slice(pkt);
         self.xfer_tx_chan.send(tx_buf).await.or(Err(mctp::Error::TxFailure))?;
         Ok(())
     }
@@ -425,12 +425,9 @@ impl MctpUsbRedirPort {
                 }
 
                 let res = self.parser.do_read();
-                match res {
-                    Err(e) => {
-                        warn!("parse error {e:?}");
-                        return Err(mctp::Error::RxFailure);
-                    }
-                    Ok(_) => (),
+                if let Err(e) = res {
+                    warn!("parse error {e:?}");
+                    return Err(mctp::Error::RxFailure);
                 }
             },
 
@@ -470,12 +467,9 @@ impl MctpUsbRedirPort {
 
         while self.parser.has_data_to_write() != 0 {
             let res = self.parser.do_write();
-            match res {
-                Err(e) => {
-                    warn!("write error {e:?}");
-                    break;
-                }
-                Ok(_) => (),
+            if let Err(e) = res {
+                warn!("write error {e:?}");
+                break;
             }
         }
         Ok(())

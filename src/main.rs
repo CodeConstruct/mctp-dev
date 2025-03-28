@@ -48,6 +48,7 @@ struct UsbRedirSubcommand {
     path: String,
 }
 
+#[allow(clippy::large_enum_variant)]
 enum Transport {
     Serial(serial::MctpSerial),
     Usb(usbredir::MctpUsbRedir),
@@ -74,7 +75,7 @@ struct Routes {
 
 impl PortLookup for Routes {
     fn by_eid(&mut self, _eid: Eid, _source_port: Option<PortId>) -> Option<PortId> {
-        return Some(PortId(0))
+        Some(PortId(0))
     }
 }
 
