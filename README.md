@@ -18,7 +18,6 @@ session. This allows connection to qemu guests.
 
         $ mctp-dev usb /dev/pts/0
         07:56:14 [INFO] Created MCTP USB transport on /dev/pts/0
-        07:56:14 [INFO] echo server listening
         07:56:14 [INFO] MCTP Control Protocol server listening
 
 Once the qemu guest is running, you will have an emulated USB device present:

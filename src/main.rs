@@ -113,6 +113,7 @@ async fn run<'a>(
     }
 }
 
+#[allow(unused)]
 async fn echo<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
     let mut l = router.listener(MsgType(1))?;
 
@@ -202,7 +203,6 @@ fn main() -> Result<()> {
     let _ = smol::block_on(async { join!(
         fut,
         run(transport, port_bottom, &router, start_time),
-        echo(&router),
         control(&router),
     )});
 
