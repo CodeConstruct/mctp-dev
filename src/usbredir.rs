@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 
 use anyhow::{Context, Result};
-use mctp_estack::{Stack, SendOutput, usb::MctpUsbHandler, usb::MctpUsbXfer};
+use mctp_estack::usb::MctpUsbHandler;
 #[allow(unused_imports)]
 use log::{debug, info, trace, warn};
 use usbredirparser::{self, Parser};

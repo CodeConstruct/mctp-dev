@@ -3,11 +3,7 @@
 use anyhow::{Context, Result};
 use embedded_io_adapters::futures_03::FromFutures;
 use smol::Async;
-use mctp::{Eid, Tag};
-use mctp_estack::{Stack, SendOutput, serial::MctpSerialHandler};
-use log::{trace, debug};
-
-use std::time::Instant;
+use mctp_estack::serial::MctpSerialHandler;
 
 #[allow(unused)]
 pub struct MctpSerial {

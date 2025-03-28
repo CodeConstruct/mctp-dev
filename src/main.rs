@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0
 
-#![allow(unused_imports)]
-
 use anyhow::Result;
 use argh::FromArgs;
 use log::{LevelFilter, info, debug, warn};
-use futures::{FutureExt, select, future, join};
+use futures::{FutureExt, select, join};
 use mctp::{AsyncListener, AsyncRespChannel};
 use mctp_estack::routing::{
     PortBuilder, PortLookup, PortStorage, Router, PortId, PortBottom,
 };
 use std::time::Instant;
 
-use mctp::{Eid,Tag,MsgType};
+use mctp::{Eid, MsgType};
 
 mod serial;
 mod usbredir;
