@@ -7,6 +7,7 @@ use usbredirparser::{self, Parser};
 use std::io::{Read as _, Write as _};
 use futures::{FutureExt, select, future};
 use std::collections::VecDeque;
+use std::pin::Pin;
 
 struct UsbRedirHandler {
     stream: std::fs::File,
@@ -26,7 +27,7 @@ const USB_XFER_SIZE: usize = 512;
 
 /* contains the usbredir state, and handles async processing */
 pub struct MctpUsbRedirPort {
-    parser: Box<usbredirparser::Parser>,
+    parser: Pin<Box<usbredirparser::Parser>>,
     stream: smol::Async<std::fs::File>,
     in_xfer_queue: VecDeque<(u64, usbredirparser::BulkPacket)>,
 
@@ -340,7 +341,10 @@ impl MctpUsbRedir {
             in_chan: redir_in_sender,
             stream: fd
         };
-        let parser = usbredirparser::Parser::new(handler);
+        let parser = usbredirparser::Parser::new(
+            handler,
+            usbredirparser::DeviceType::Host,
+        );
 
         let (xfer_out_sender, xfer_out_receiver) = async_channel::unbounded();
         let (xfer_in_sender, xfer_in_receiver) = async_channel::unbounded();
