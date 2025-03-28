@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0
+
 #![allow(unused_imports)]
 
 use anyhow::Result;

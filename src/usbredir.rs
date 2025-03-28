@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 
 use anyhow::{Context, Result};
 use mctp_estack::{Stack, SendOutput, usb::MctpUsbHandler, usb::MctpUsbXfer};

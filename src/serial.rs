@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0
+//
 use anyhow::{Context, Result};
 use embedded_io_adapters::futures_03::FromFutures;
 use smol::Async;
