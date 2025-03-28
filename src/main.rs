@@ -2,12 +2,13 @@
 
 use anyhow::Result;
 use argh::FromArgs;
-use log::{LevelFilter, info, debug};
+use log::{LevelFilter, info, debug, warn};
 use futures::{FutureExt, select, future, join};
 use mctp::{AsyncListener, AsyncRespChannel};
 use mctp_estack::routing::{
     PortBuilder, PortLookup, PortStorage, Router, PortId, PortBottom,
 };
+use std::time::Instant;
 
 use mctp::{Eid,Tag,MsgType};
 
@@ -78,22 +79,34 @@ impl PortLookup for Routes {
 }
 
 
+async fn update_router_time(router: &Router<'_>, start_time: Instant)
+{
+    let ms = (Instant::now() - start_time).as_millis() as u64;
+    let r = router.update_time(ms).await;
+    if let Err(e) = r {
+        warn!("time update failure: {e}");
+    }
+}
+
 async fn run<'a>(
     mut transport: Transport,
     mut port: PortBottom<'_>,
     router: &'a Router<'a>,
+    start_time: Instant,
 ) -> std::io::Result<()> {
     let portid = PortId(0);
     loop {
         select!(
             r = transport.recv().fuse() => {
+                update_router_time(router, start_time).await;
                 if let Ok(pkt) = r {
-                    router.receive(pkt, portid).await;
+                    router.inbound(pkt, portid).await;
                 }
             }
-            (pkt, _dest) = port.receive().fuse() => {
+            (pkt, _dest) = port.outbound().fuse() => {
+                update_router_time(router, start_time).await;
                 let _ = transport.send(pkt).await;
-                port.receive_done();
+                port.outbound_done();
             }
         );
     }
@@ -154,10 +167,12 @@ fn main() -> Result<()> {
         port_top,
     ];
 
+    let start_time = Instant::now();
+
     let stack = mctp_estack::Stack::new(
         eid,
         mtu,
-        0u64, /* todo: time */
+        0u64,
     );
 
     let mut routes = Routes { };
@@ -185,7 +200,7 @@ fn main() -> Result<()> {
 
     let _ = smol::block_on(async { join!(
         fut,
-        run(transport, port_bottom, &router),
+        run(transport, port_bottom, &router, start_time),
         echo(&router),
         control(&router),
     )});
