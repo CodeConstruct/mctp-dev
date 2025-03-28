@@ -4,6 +4,18 @@
 `mctp-dev` implements a simple MCTP endpoint device, connected to a usbredir
 session. This allows connection to qemu guests.
 
+# Building
+
+For most systems:
+
+```sh
+cargo build
+```
+
+`mctp-dev` uses the `usbredir-rs` crate, which has a dependency on system C
+libraries. You may need the `libusbredirparser-dev` and `libusbredirhost-dev`
+packages installed for your distribution.
+
 # Running
 
 1. Run `qemu` with a usbredir connection to a pty:
