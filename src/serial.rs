@@ -2,8 +2,8 @@
 //
 use anyhow::{Context, Result};
 use embedded_io_adapters::futures_03::FromFutures;
-use smol::Async;
 use mctp_estack::serial::MctpSerialHandler;
+use smol::Async;
 
 #[allow(unused)]
 pub struct MctpSerial {
@@ -13,7 +13,6 @@ pub struct MctpSerial {
 
 impl MctpSerial {
     pub fn new(tty: &str) -> Result<Self> {
-
         let serial = std::fs::OpenOptions::new()
             .write(true)
             .read(true)
@@ -24,10 +23,7 @@ impl MctpSerial {
 
         let mctpserial = MctpSerialHandler::new();
 
-        Ok(Self {
-            mctpserial,
-            serial,
-        })
+        Ok(Self { mctpserial, serial })
     }
 
     pub async fn recv(&mut self) -> mctp::Result<&[u8]> {
@@ -37,5 +33,4 @@ impl MctpSerial {
     pub async fn send(&mut self, _pkt: &[u8]) -> mctp::Result<()> {
         todo!()
     }
-
 }

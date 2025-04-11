@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0
 
 use anyhow::{Context, Result};
-use mctp_estack::usb::MctpUsbHandler;
+use futures::{future, select, FutureExt};
 #[allow(unused_imports)]
 use log::{debug, info, trace, warn};
-use usbredirparser::{self, Parser};
-use std::io::{Read as _, Write as _};
-use futures::{FutureExt, select, future};
+use mctp_estack::usb::MctpUsbHandler;
 use std::collections::VecDeque;
+use std::io::{Read as _, Write as _};
 use std::pin::Pin;
+use usbredirparser::{self, Parser};
 
 struct UsbRedirHandler {
     stream: std::fs::File,
@@ -62,9 +62,9 @@ impl usbredirparser::ParserHandler for UsbRedirHandler {
         trace!("read:in:{:x?}", buf);
         match res {
             Ok(0) => Err(std::io::Error::new(
-                        std::io::ErrorKind::BrokenPipe,
-                        "disconnected",
-                      )),
+                std::io::ErrorKind::BrokenPipe,
+                "disconnected",
+            )),
             r => r,
         }
     }
@@ -90,33 +90,45 @@ impl usbredirparser::ParserHandler for UsbRedirHandler {
         debug!("reset");
     }
 
-    fn control_packet(&mut self, parser: &Parser, id: u64,
-        pkt: &usbredirparser::ControlPacket, data: &[u8]) {
+    fn control_packet(
+        &mut self,
+        parser: &Parser,
+        id: u64,
+        pkt: &usbredirparser::ControlPacket,
+        data: &[u8],
+    ) {
         debug!("control packet {id} {pkt:x?}, data: {data:x?}");
         if pkt.request == USB_CTRL_GET_DESCRIPTOR {
             self.control_get_descriptor(parser, id, pkt)
         }
     }
 
-    fn bulk_packet(&mut self, parser: &Parser, id: u64,
-        pkt: &usbredirparser::BulkPacket, data: &[u8]) {
+    fn bulk_packet(
+        &mut self,
+        parser: &Parser,
+        id: u64,
+        pkt: &usbredirparser::BulkPacket,
+        data: &[u8],
+    ) {
         debug!("bulk packet {id} {pkt:x?}, data: {data:x?}");
         match pkt.endpoint {
             EP_ADDR_IN => {
-                self.in_chan.send_blocking((id, *pkt))
+                self.in_chan
+                    .send_blocking((id, *pkt))
                     .expect("can't send to in channel");
             }
             EP_ADDR_OUT => {
                 let mut v = Vec::with_capacity(data.len());
                 v.extend_from_slice(data);
-                self.out_chan.send_blocking(v)
+                self.out_chan
+                    .send_blocking(v)
                     .expect("can't send to out channel");
                 /* ack */
                 let resp = usbredirparser::BulkPacket {
                     status: 0,
                     length: 0,
                     length_high: 0,
-                    .. *pkt
+                    ..*pkt
                 };
                 parser.send_bulk_packet(id, &resp, &[]);
             }
@@ -134,8 +146,8 @@ impl usbredirparser::ParserHandler for UsbRedirHandler {
         &mut self,
         parser: &Parser,
         id: u64,
-        cfg: &usbredirparser::SetConfiguration)
-    {
+        cfg: &usbredirparser::SetConfiguration,
+    ) {
         debug!("set configuration {}", cfg.configuration);
 
         let mut cfg_status = usbredirparser::ConfigurationStatus {
@@ -152,12 +164,13 @@ impl usbredirparser::ParserHandler for UsbRedirHandler {
     }
 }
 
-const USB_DESC_TYPE_DEVICE : u8 = 1;
-const USB_DESC_TYPE_CONFIGURATION : u8 = 2;
-const USB_DESC_TYPE_STRING : u8 = 3;
-const USB_DESC_TYPE_INTERFACE : u8 = 4;
-const USB_DESC_TYPE_ENDPOINT : u8 = 5;
+const USB_DESC_TYPE_DEVICE: u8 = 1;
+const USB_DESC_TYPE_CONFIGURATION: u8 = 2;
+const USB_DESC_TYPE_STRING: u8 = 3;
+const USB_DESC_TYPE_INTERFACE: u8 = 4;
+const USB_DESC_TYPE_ENDPOINT: u8 = 5;
 
+#[rustfmt::skip]
 const DEV_DESC : [u8; 18] = [
     18, /* bLength */
     USB_DESC_TYPE_DEVICE, /* bDescriptorTYpe */
@@ -175,6 +188,7 @@ const DEV_DESC : [u8; 18] = [
     0x01, /* bNumConfigurations */
 ];
 
+#[rustfmt::skip]
 const CONFIG_DESC : [u8; 9] = [
     0x09, /* bLength */
     USB_DESC_TYPE_CONFIGURATION, /* bDescriptorType */
@@ -186,6 +200,7 @@ const CONFIG_DESC : [u8; 9] = [
     0x01, /* bMaxPower: 2ma */
 ];
 
+#[rustfmt::skip]
 const IFACE_DESC :  [u8; 9] = [
     0x09, /* bLength */
     USB_DESC_TYPE_INTERFACE, /* bDescriptorType */
@@ -198,6 +213,7 @@ const IFACE_DESC :  [u8; 9] = [
     0x04, /* iInterface */
 ];
 
+#[rustfmt::skip]
 const EP_DESCS : [[u8; 7]; 2] = [
     [
         0x07, /* bLength */
@@ -218,6 +234,7 @@ const EP_DESCS : [[u8; 7]; 2] = [
 
 ];
 
+#[rustfmt::skip]
 const STRINGS : &[&str] = &[
     "mctp-dev",
     "MCTP over USB device",
@@ -225,6 +242,7 @@ const STRINGS : &[&str] = &[
     "MCTP over USB",
 ];
 
+#[rustfmt::skip]
 const STRING_LANGS : [u8; 4] = [
     4, /* bLength */
     USB_DESC_TYPE_STRING, /* bDescriptorType */
@@ -236,19 +254,15 @@ impl UsbRedirHandler {
         &mut self,
         parser: &Parser,
         id: u64,
-        req: &usbredirparser::ControlPacket
+        req: &usbredirparser::ControlPacket,
     ) {
         let mut resp = usbredirparser::ControlPacket { ..*req };
-        let (desc_type, desc_idx) : (u8, u8) = (
-            ((req.value >> 8) & 0xff) as u8,
-            ((req.value     ) & 0xff) as u8
-        );
+        let (desc_type, desc_idx): (u8, u8) =
+            (((req.value >> 8) & 0xff) as u8, ((req.value) & 0xff) as u8);
         debug!("desc request for type {desc_type:02x} idx {desc_idx:02x}");
         let mut v = Vec::new();
         let mut data = match desc_type {
-            USB_DESC_TYPE_DEVICE => {
-                DEV_DESC.as_slice()
-            },
+            USB_DESC_TYPE_DEVICE => DEV_DESC.as_slice(),
             USB_DESC_TYPE_STRING => {
                 let s_idx = desc_idx as usize;
                 if s_idx == 0 {
@@ -272,7 +286,7 @@ impl UsbRedirHandler {
                 /* set total length */
                 let len = v.len() as u16;
                 v[3] = ((len >> 8) & 0xff) as u8;
-                v[2] = ((len     ) & 0xff) as u8;
+                v[2] = ((len) & 0xff) as u8;
                 v.as_slice()
             }
             _ => {
@@ -324,7 +338,6 @@ impl UsbRedirHandler {
 }
 
 impl MctpUsbRedir {
-
     pub fn new(path: &str) -> Result<(Self, MctpUsbRedirPort)> {
         let fd = std::fs::OpenOptions::new()
             .write(true)
@@ -339,12 +352,9 @@ impl MctpUsbRedir {
         let handler = UsbRedirHandler {
             out_chan: redir_out_sender,
             in_chan: redir_in_sender,
-            stream: fd
+            stream: fd,
         };
-        let parser = usbredirparser::Parser::new(
-            handler,
-            usbredirparser::DeviceType::Host,
-        );
+        let parser = usbredirparser::Parser::new(handler, usbredirparser::DeviceType::Host);
 
         let (xfer_out_sender, xfer_out_receiver) = async_channel::unbounded();
         let (xfer_in_sender, xfer_in_receiver) = async_channel::unbounded();
@@ -358,18 +368,24 @@ impl MctpUsbRedir {
             xfer_tx_chan: xfer_in_receiver,
         };
 
-        Ok((Self {
-            mctpusb: MctpUsbHandler::new(),
-            rx_buf: [0u8; USB_XFER_SIZE ],
-            rx_remain: std::ops::Range { start: 0, end: 0 },
-            xfer_tx_chan: xfer_in_sender,
-            xfer_rx_chan: xfer_out_receiver,
-        }, port))
+        Ok((
+            Self {
+                mctpusb: MctpUsbHandler::new(),
+                rx_buf: [0u8; USB_XFER_SIZE],
+                rx_remain: std::ops::Range { start: 0, end: 0 },
+                xfer_tx_chan: xfer_in_sender,
+                xfer_rx_chan: xfer_out_receiver,
+            },
+            port,
+        ))
     }
 
     pub async fn recv(&mut self) -> mctp::Result<&[u8]> {
         if self.rx_remain.is_empty() {
-            let r = self.xfer_rx_chan.recv().await
+            let r = self
+                .xfer_rx_chan
+                .recv()
+                .await
                 .or(Err(mctp::Error::RxFailure))?;
             let len = r.len();
             if len > self.rx_buf.len() {
@@ -390,7 +406,6 @@ impl MctpUsbRedir {
                 Err(mctp::Error::RxFailure)
             }
         }
-
     }
 
     pub async fn send(&mut self, pkt: &[u8]) -> mctp::Result<()> {
@@ -400,13 +415,15 @@ impl MctpUsbRedir {
         MctpUsbHandler::header(pkt.len(), &mut hdr)?;
         tx_buf.extend_from_slice(&hdr);
         tx_buf.extend_from_slice(pkt);
-        self.xfer_tx_chan.send(tx_buf).await.or(Err(mctp::Error::TxFailure))?;
+        self.xfer_tx_chan
+            .send(tx_buf)
+            .await
+            .or(Err(mctp::Error::TxFailure))?;
         Ok(())
     }
 }
 
 impl MctpUsbRedirPort {
-
     async fn process_one(&mut self) -> mctp::Result<()> {
         // we only poll on the tx future (outgoing USB transfers from the MCTP
         // stack) if we have a usbredir IN transfer queued and ready to go.
@@ -479,6 +496,5 @@ impl MctpUsbRedirPort {
         loop {
             self.process_one().await?
         }
-
     }
 }

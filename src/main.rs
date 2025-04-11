@@ -2,12 +2,10 @@
 
 use anyhow::Result;
 use argh::FromArgs;
-use log::{LevelFilter, info, debug, warn};
-use futures::{FutureExt, select, join};
+use futures::{join, select, FutureExt};
+use log::{debug, info, warn, LevelFilter};
 use mctp::{AsyncListener, AsyncRespChannel};
-use mctp_estack::routing::{
-    PortBuilder, PortLookup, PortStorage, Router, PortId, PortBottom,
-};
+use mctp_estack::routing::{PortBottom, PortBuilder, PortId, PortLookup, PortStorage, Router};
 use std::time::Instant;
 
 use mctp::{Eid, MsgType};
@@ -31,7 +29,7 @@ enum TransportSubcommand {
 }
 
 #[derive(FromArgs)]
-#[argh(subcommand, name="serial")]
+#[argh(subcommand, name = "serial")]
 /// Serial transport
 struct SerialSubcommand {
     /// TTY device
@@ -40,7 +38,7 @@ struct SerialSubcommand {
 }
 
 #[derive(FromArgs)]
-#[argh(subcommand, name="usb")]
+#[argh(subcommand, name = "usb")]
 /// USB redir transport
 struct UsbRedirSubcommand {
     /// path to socket
@@ -70,8 +68,7 @@ impl Transport {
     }
 }
 
-struct Routes {
-}
+struct Routes {}
 
 impl PortLookup for Routes {
     fn by_eid(&mut self, _eid: Eid, _source_port: Option<PortId>) -> Option<PortId> {
@@ -79,9 +76,7 @@ impl PortLookup for Routes {
     }
 }
 
-
-async fn update_router_time(router: &Router<'_>, start_time: Instant)
-{
+async fn update_router_time(router: &Router<'_>, start_time: Instant) {
     let ms = (Instant::now() - start_time).as_millis() as u64;
     let r = router.update_time(ms).await;
     if let Err(e) = r {
@@ -154,8 +149,8 @@ async fn control<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
 }
 
 fn main() -> Result<()> {
-    let opts : Options = argh::from_env();
-    
+    let opts: Options = argh::from_env();
+
     let conf = simplelog::ConfigBuilder::new().build();
     simplelog::SimpleLogger::init(LevelFilter::Debug, conf)?;
 
@@ -165,19 +160,13 @@ fn main() -> Result<()> {
     let mut port_storage = PortStorage::<4>::new();
     let mut port = PortBuilder::new(&mut port_storage);
     let (port_top, port_bottom) = port.build(mtu).unwrap();
-    let ports = [
-        port_top,
-    ];
+    let ports = [port_top];
 
     let start_time = Instant::now();
 
-    let stack = mctp_estack::Stack::new(
-        eid,
-        mtu,
-        0u64,
-    );
+    let stack = mctp_estack::Stack::new(eid, mtu, 0u64);
 
-    let mut routes = Routes { };
+    let mut routes = Routes {};
     let router = Router::new(stack, &ports, &mut routes);
 
     let (transport, mut port) = match opts.transport {
@@ -200,11 +189,13 @@ fn main() -> Result<()> {
         None => futures::future::Either::Right(futures::future::pending()),
     };
 
-    let _ = smol::block_on(async { join!(
-        fut,
-        run(transport, port_bottom, &router, start_time),
-        control(&router),
-    )});
+    let _ = smol::block_on(async {
+        join!(
+            fut,
+            run(transport, port_bottom, &router, start_time),
+            control(&router),
+        )
+    });
 
     Ok(())
 }
