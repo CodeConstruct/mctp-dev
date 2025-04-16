@@ -6,6 +6,10 @@ use futures::{select, FutureExt};
 use log::{debug, info, warn, LevelFilter};
 use mctp::{AsyncListener, AsyncRespChannel, Eid};
 use mctp_estack::router::{PortBottom, PortBuilder, PortId, PortLookup, PortStorage, Router};
+#[cfg(feature = "nvme-mi")]
+use nvme_mi_dev::nvme::{
+    ManagementEndpoint, PCIePort, PortType, Subsystem, SubsystemInfo, TwoWirePort,
+};
 use std::time::Instant;
 
 mod serial;
@@ -136,7 +140,13 @@ async fn control<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
     let mut c = mctp_estack::control::MctpControl::new(router);
     let u = uuid::Uuid::new_v4();
 
-    let _ = c.set_message_types(&[mctp::MCTP_TYPE_CONTROL]);
+    let types = [
+        mctp::MCTP_TYPE_CONTROL,
+        #[cfg(feature = "nvme-mi")]
+        mctp::MCTP_TYPE_NVME,
+    ];
+
+    c.set_message_types(&types)?;
     c.set_uuid(&u);
 
     info!("MCTP Control Protocol server listening");
@@ -152,6 +162,55 @@ async fn control<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
             info!("control handler failure: {e}");
         }
     }
+}
+
+#[cfg(feature = "nvme-mi")]
+async fn nvme_mi<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
+    let mut l = router.listener(mctp::MCTP_TYPE_NVME)?;
+
+    let mut subsys = Subsystem::new(SubsystemInfo::environment());
+    let ppid = subsys
+        .add_port(PortType::PCIe(PCIePort::new()))
+        .expect("Unable to create PCIe port");
+    let ctlrid = subsys
+        .add_controller(ppid)
+        .expect("Unable to create controller");
+    let nsid = subsys
+        .add_namespace(1024)
+        .expect("Unable to create namespace");
+    subsys
+        .add_namespace(2048)
+        .expect("Unable to create namespace");
+    subsys
+        .controller_mut(ctlrid)
+        .attach_namespace(nsid)
+        .unwrap_or_else(|_| {
+            panic!(
+                "Unable to attach namespace {:?} to controller {:?}",
+                nsid, ctlrid
+            )
+        });
+    let twpid = subsys
+        .add_port(PortType::TwoWire(TwoWirePort::new()))
+        .expect("Unable to create TwoWire port");
+    let mut mep = ManagementEndpoint::new(twpid);
+
+    debug!("NVMe-MI endpoint listening");
+
+    let mut buf = [0u8; 4224];
+    loop {
+        let Ok((_typ, ic, msg, resp)) = l.recv(&mut buf).await else {
+            debug!("recv() failed");
+            continue;
+        };
+
+        debug!("Handling NVMe-MI message: {msg:x?}");
+        mep.handle_async(&mut subsys, msg, ic, resp).await;
+    }
+}
+#[cfg(not(feature = "nvme-mi"))]
+async fn nvme_mi<'a>(_router: &'a Router<'a>) -> std::io::Result<()> {
+    futures::future::pending().await
 }
 
 fn main() -> Result<()> {
@@ -200,6 +259,7 @@ fn main() -> Result<()> {
             _ = fut.fuse() => (),
             _ = run(transport, port_bottom, &router, start_time).fuse() => (),
             _ = control(&router).fuse() => (),
+            _ = nvme_mi(&router).fuse() => ()
         )
     });
 

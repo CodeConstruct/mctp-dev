@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0"
 
+[features]
+nvme-mi = ["dep:nvme-mi-dev"]
+
 [dependencies]
 anyhow = "1.0.86"
 argh = "0.1.12"
@@ -23,3 +26,4 @@ futures = "0.3.31"
 async-channel = "2.3.1"
 critical-section = { version = "1.2.0", features = ["std"] }
 uuid = { version = "1.16.0", features = ["v4"] }
+nvme-mi-dev = { git = "https://github.com/CodeConstruct/nvme-mi-dev", rev = "822803a6cc4b9481c5fb389c6658a7db7e803eb8", optional = true }
