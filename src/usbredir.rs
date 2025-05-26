@@ -12,6 +12,7 @@ use usbredirparser::{self, Parser};
 
 enum RedirRxOp {
     Submission(u64, usbredirparser::BulkPacket),
+    Cancellation(u64),
 }
 
 struct UsbRedirHandler {
@@ -144,6 +145,7 @@ impl usbredirparser::ParserHandler for UsbRedirHandler {
 
     fn cancel_data_packet(&mut self, _parser: &Parser, id: u64) {
         debug!("cancel packet {id}");
+        let _ = self.in_chan.send_blocking(RedirRxOp::Cancellation(id));
     }
 
     fn set_configuration(
@@ -465,6 +467,9 @@ impl MctpUsbRedirPort {
                     Ok(RedirRxOp::Submission(id, pkt)) => {
                         self.in_xfer_queue.push_back((id, pkt));
                     }
+                    Ok(RedirRxOp::Cancellation(id)) => {
+                        self.cancel(id);
+                    }
                     _ => (),
                 }
             }
@@ -502,6 +507,18 @@ impl MctpUsbRedirPort {
     pub async fn process(&mut self) -> mctp::Result<()> {
         loop {
             self.process_one().await?
+        }
+    }
+
+    fn cancel(&mut self, id: u64) {
+        let res = self.in_xfer_queue
+            .iter()
+            .enumerate()
+            .find_map(|(i, e)| if e.0 == id { Some(i) } else { None });
+        if let Some(idx) = res {
+            self.in_xfer_queue.remove(idx);
+        } else {
+            debug!("cancellation for unknown id {id}");
         }
     }
 }
