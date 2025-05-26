@@ -10,10 +10,14 @@ use std::io::{Read as _, Write as _};
 use std::pin::Pin;
 use usbredirparser::{self, Parser};
 
+enum RedirRxOp {
+    Submission(u64, usbredirparser::BulkPacket),
+}
+
 struct UsbRedirHandler {
     stream: std::fs::File,
     out_chan: async_channel::Sender<Vec<u8>>,
-    in_chan: async_channel::Sender<(u64, usbredirparser::BulkPacket)>,
+    in_chan: async_channel::Sender<RedirRxOp>
 }
 
 const USB_CLASS_MCTP: u8 = 0x14;
@@ -37,7 +41,7 @@ pub struct MctpUsbRedirPort {
      * usbredirparser callback API
      */
     redir_out_chan: async_channel::Receiver<Vec<u8>>,
-    redir_in_chan: async_channel::Receiver<(u64, usbredirparser::BulkPacket)>,
+    redir_in_chan: async_channel::Receiver<RedirRxOp>,
 
     /* usb transfer interactions, connected to the higher-level objects */
     xfer_tx_chan: async_channel::Receiver<Vec<u8>>,
@@ -114,7 +118,7 @@ impl usbredirparser::ParserHandler for UsbRedirHandler {
         match pkt.endpoint {
             EP_ADDR_IN => {
                 self.in_chan
-                    .send_blocking((id, *pkt))
+                    .send_blocking(RedirRxOp::Submission(id, *pkt))
                     .expect("can't send to in channel");
             }
             EP_ADDR_OUT => {
@@ -457,8 +461,11 @@ impl MctpUsbRedirPort {
 
             // rx from redir
             r = self.redir_in_chan.recv().fuse() => {
-                if let Ok((id, pkt)) = r {
-                    self.in_xfer_queue.push_back((id, pkt));
+                match r {
+                    Ok(RedirRxOp::Submission(id, pkt)) => {
+                        self.in_xfer_queue.push_back((id, pkt));
+                    }
+                    _ => (),
                 }
             }
 
