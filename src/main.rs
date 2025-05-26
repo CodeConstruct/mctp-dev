@@ -71,7 +71,11 @@ impl Transport {
 struct Routes {}
 
 impl PortLookup for Routes {
-    fn by_eid(&mut self, _eid: Eid, _source_port: Option<PortId>) -> Option<PortId> {
+    fn by_eid(&mut self, _eid: Eid, source_port: Option<PortId>) -> Option<PortId> {
+        // we're an endpoint device, don't forward packets from other ports
+        if source_port.is_some() {
+            return None;
+        }
         Some(PortId(0))
     }
 }
