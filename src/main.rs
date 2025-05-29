@@ -4,11 +4,9 @@ use anyhow::Result;
 use argh::FromArgs;
 use futures::{join, select, FutureExt};
 use log::{debug, info, warn, LevelFilter};
-use mctp::{AsyncListener, AsyncRespChannel};
+use mctp::{AsyncListener, AsyncRespChannel, Eid};
 use mctp_estack::routing::{PortBottom, PortBuilder, PortId, PortLookup, PortStorage, Router};
 use std::time::Instant;
-
-use mctp::{Eid, MsgType};
 
 mod serial;
 mod usbredir;
@@ -114,7 +112,8 @@ async fn run<'a>(
 
 #[allow(unused)]
 async fn echo<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
-    let mut l = router.listener(MsgType(1))?;
+    const VENDOR_SUBTYPE_ECHO: [u8; 3] = [0xcc, 0xde, 0xf0];
+    let mut l = router.listener(mctp::MCTP_TYPE_VENDOR_PCIE)?;
 
     info!("echo server listening");
     let mut buf = [0u8; 100];
@@ -122,6 +121,10 @@ async fn echo<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
         let Ok((msg, mut resp, _tag, typ, _ic)) = l.recv(&mut buf).await else {
             continue;
         };
+
+        if ! msg.starts_with(&VENDOR_SUBTYPE_ECHO) {
+            continue;
+        }
 
         if let Err(_e) = resp.send(typ, msg).await {
             debug!("listener reply fail");
