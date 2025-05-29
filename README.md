@@ -2,7 +2,11 @@
 --------------------------------
 
 `mctp-dev` implements a simple MCTP endpoint device, connected to a usbredir
-session. This allows connection to qemu guests.
+session. This allows connection to qemu guests, as a simple external MCTP
+device, and is intended for testing and development of the system MCTP stack.
+
+The MCTP endpoint implements the MCTP control protocol, allowing device
+discovery and enumeration.
 
 # Building
 
