@@ -1,12 +1,16 @@
 `mctp-dev`: MCTP device emulator
 --------------------------------
 
-`mctp-dev` implements a simple MCTP endpoint device, connected to a usbredir
-session. This allows connection to qemu guests, as a simple external MCTP
-device, and is intended for testing and development of the system MCTP stack.
+`mctp-dev` is a small Linux application that implements a simple MCTP endpoint
+device, connected to a usbredir (or serial) session.
+
+Since the qemu emulator can speak usbredir too, this allows us to create a MCTP
+device that can be connected to a qemu quest, and is intended for testing and
+development of the guest system's MCTP stack.
 
 The MCTP endpoint implements the MCTP control protocol, allowing device
-discovery and enumeration.
+discovery and enumeration. New MCTP-based protocols should be straightforward to
+add to the `mctp-dev` framework.
 
 # Building
 
