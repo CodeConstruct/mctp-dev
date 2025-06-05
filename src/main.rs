@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use argh::FromArgs;
-use futures::{join, select, FutureExt};
+use futures::{select, FutureExt};
 use log::{debug, info, warn, LevelFilter};
 use mctp::{AsyncListener, AsyncRespChannel, Eid};
 use mctp_estack::router::{PortBottom, PortBuilder, PortId, PortLookup, PortStorage, Router};
@@ -97,9 +97,8 @@ async fn run<'a>(
         select!(
             r = transport.recv().fuse() => {
                 update_router_time(router, start_time).await;
-                if let Ok(pkt) = r {
-                    router.inbound(pkt, portid).await;
-                }
+                let pkt = r?;
+                router.inbound(pkt, portid).await;
             }
             (pkt, _dest) = port.outbound().fuse() => {
                 update_router_time(router, start_time).await;
@@ -196,11 +195,11 @@ fn main() -> Result<()> {
         None => futures::future::Either::Right(futures::future::pending()),
     };
 
-    let _ = smol::block_on(async {
-        join!(
-            fut,
-            run(transport, port_bottom, &router, start_time),
-            control(&router),
+    smol::block_on(async {
+        select!(
+            _ = fut.fuse() => (),
+            _ = run(transport, port_bottom, &router, start_time).fuse() => (),
+            _ = control(&router).fuse() => (),
         )
     });
 
