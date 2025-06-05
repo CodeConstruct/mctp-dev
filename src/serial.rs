@@ -27,10 +27,10 @@ impl MctpSerial {
     }
 
     pub async fn recv(&mut self) -> mctp::Result<&[u8]> {
-        todo!()
+        self.mctpserial.recv_async(&mut self.serial).await
     }
 
-    pub async fn send(&mut self, _pkt: &[u8]) -> mctp::Result<()> {
-        todo!()
+    pub async fn send(&mut self, pkt: &[u8]) -> mctp::Result<()> {
+        self.mctpserial.send_async(pkt, &mut self.serial).await
     }
 }
