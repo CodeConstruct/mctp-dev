@@ -18,7 +18,7 @@ enum RedirRxOp {
 struct UsbRedirHandler {
     stream: std::fs::File,
     out_chan: async_channel::Sender<Vec<u8>>,
-    in_chan: async_channel::Sender<RedirRxOp>
+    in_chan: async_channel::Sender<RedirRxOp>,
 }
 
 const USB_CLASS_MCTP: u8 = 0x14;
@@ -511,10 +511,11 @@ impl MctpUsbRedirPort {
     }
 
     fn cancel(&mut self, id: u64) {
-        let res = self.in_xfer_queue
-            .iter()
-            .enumerate()
-            .find_map(|(i, e)| if e.0 == id { Some(i) } else { None });
+        let res =
+            self.in_xfer_queue
+                .iter()
+                .enumerate()
+                .find_map(|(i, e)| if e.0 == id { Some(i) } else { None });
         if let Some(idx) = res {
             self.in_xfer_queue.remove(idx);
         } else {

@@ -121,7 +121,7 @@ async fn echo<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
             continue;
         };
 
-        if ! msg.starts_with(&VENDOR_SUBTYPE_ECHO) {
+        if !msg.starts_with(&VENDOR_SUBTYPE_ECHO) {
             continue;
         }
 
