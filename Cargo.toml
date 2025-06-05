@@ -14,7 +14,6 @@ simplelog = "0.12.2"
 smol = "2.0.0"
 mctp = { git = "http://github.com/CodeConstruct/mctp-rs", tag = "dev/mctp-stack-v0.1.0", package = "mctp" }
 mctp-estack = { git = "http://github.com/CodeConstruct/mctp-rs", tag = "dev/mctp-stack-v0.1.0", package = "mctp-estack" }
-mctp-standalone = { git = "http://github.com/CodeConstruct/mctp-rs", tag = "dev/mctp-stack-v0.1.0", package = "mctp-standalone" }
 embedded-io-adapters = { version = "0.6", features = [ "futures-03" ] }
 embedded-io-async = { version = "0.6" }
 usbredirparser = { git = "https://github.com/CodeConstruct/usbredir-rs", branch = "main", package = "usbredirparser" }
