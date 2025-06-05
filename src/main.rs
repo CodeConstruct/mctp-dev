@@ -5,7 +5,7 @@ use argh::FromArgs;
 use futures::{join, select, FutureExt};
 use log::{debug, info, warn, LevelFilter};
 use mctp::{AsyncListener, AsyncRespChannel, Eid};
-use mctp_estack::routing::{PortBottom, PortBuilder, PortId, PortLookup, PortStorage, Router};
+use mctp_estack::router::{PortBottom, PortBuilder, PortId, PortLookup, PortStorage, Router};
 use std::time::Instant;
 
 mod serial;
@@ -118,7 +118,7 @@ async fn echo<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
     info!("echo server listening");
     let mut buf = [0u8; 100];
     loop {
-        let Ok((msg, mut resp, _tag, typ, _ic)) = l.recv(&mut buf).await else {
+        let Ok((_typ, _ic, msg, mut resp)) = l.recv(&mut buf).await else {
             continue;
         };
 
@@ -126,7 +126,7 @@ async fn echo<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
             continue;
         }
 
-        if let Err(_e) = resp.send(typ, msg).await {
+        if let Err(_e) = resp.send(msg).await {
             debug!("listener reply fail");
         }
     }
@@ -143,7 +143,7 @@ async fn control<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
     info!("MCTP Control Protocol server listening");
     let mut buf = [0u8; 256];
     loop {
-        let Ok((msg, resp, _tag, _typ, _ic)) = l.recv(&mut buf).await else {
+        let Ok((_typ, _ic, msg, resp)) = l.recv(&mut buf).await else {
             continue;
         };
 

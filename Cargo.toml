@@ -12,8 +12,8 @@ futures-io = "0.3.30"
 log = "0.4.22"
 simplelog = "0.12.2"
 smol = "2.0.0"
-mctp = { git = "http://github.com/CodeConstruct/mctp-rs", tag = "dev/mctp-stack-v0.1.0", package = "mctp" }
-mctp-estack = { git = "http://github.com/CodeConstruct/mctp-rs", tag = "dev/mctp-stack-v0.1.0", package = "mctp-estack" }
+mctp = { git = "http://github.com/CodeConstruct/mctp-rs", rev = "0ae21b3e52eccca5ebee8796a317be9806851416", package = "mctp" }
+mctp-estack = { git = "http://github.com/CodeConstruct/mctp-rs", rev = "0ae21b3e52eccca5ebee8796a317be9806851416", package = "mctp-estack" }
 embedded-io-adapters = { version = "0.6", features = [ "futures-03" ] }
 embedded-io-async = { version = "0.6" }
 usbredirparser = { git = "https://github.com/CodeConstruct/usbredir-rs", branch = "main", package = "usbredirparser" }
