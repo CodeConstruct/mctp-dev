@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-3.0
 
 use anyhow::{Context, Result};
 use futures::{future, select, FutureExt};
