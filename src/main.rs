@@ -14,7 +14,7 @@ mod usbredir;
 #[derive(FromArgs)]
 /// Run an emulated MCTP device
 struct Options {
-    /// trasnsport to use: serial
+    /// MCTP transport to use
     #[argh(subcommand)]
     transport: TransportSubcommand,
 }
