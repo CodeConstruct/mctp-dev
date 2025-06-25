@@ -12,6 +12,11 @@ The MCTP endpoint implements the MCTP control protocol, allowing device
 discovery and enumeration. New MCTP-based protocols should be straightforward to
 add to the `mctp-dev` framework.
 
+When built with the `nvme-mi` feature, the MCTP endpoint also supports the
+NVMe-MI protocol, emulating a simple MCTP-managed storage device. The NVMe-MI
+responder implementation is provided by the
+[`nvme-mi-dev`](https://github.com/CodeConstruct/nvme-mi-dev) crate.
+
 # Building
 
 For most systems:
@@ -23,6 +28,12 @@ cargo build
 `mctp-dev` uses the `usbredir-rs` crate, which has a dependency on system C
 libraries. You may need the `libusbredirparser-dev` and `libusbredirhost-dev`
 packages installed for your distribution.
+
+To incorporate NVMe-MI responder support, add the `nvme-mi` feature:
+
+```sh
+cargo build --features nvme-mi
+```
 
 # Running
 
