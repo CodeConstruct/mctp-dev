@@ -1,0 +1,4 @@
+
+[env]
+# set message size in estack, suitable for NVMe-MI
+MCTP_ESTACK_MAX_MESSAGE = "4224"
