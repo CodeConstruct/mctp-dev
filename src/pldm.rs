@@ -2,6 +2,7 @@
 
 use anyhow::{bail, Context, Result};
 use log::{debug, info, warn};
+use sha2::{Digest, Sha256};
 
 use mctp_estack::{control::ControlEvent, router::Router};
 use pldm::{control::requester::negotiate_transfer_parameters, PldmError};
@@ -63,27 +64,29 @@ async fn pldm_file(
 
     debug!("Open: {fd:?}");
 
-    let mut buf = Vec::new();
+    let mut hash = Sha256::new();
     let req_len = size;
+    let mut cur_len = 0usize;
 
     debug!("Reading...");
     let res = df_read_with(chan, fd, 0, req_len, |part| {
-        debug!(
-            "  {} bytes, {}/{req_len}",
-            part.len(),
-            buf.len() + part.len()
-        );
-        if buf.len() + part.len() > req_len {
+        cur_len += part.len();
+        debug!("  {} bytes, {cur_len}/{req_len}", part.len());
+        if cur_len > req_len {
             warn!("  data overflow!");
             Err(PldmError::NoSpace)
         } else {
-            buf.extend_from_slice(part);
+            hash.update(part);
             Ok(())
         }
     })
     .await;
 
     debug!("Read: {res:?}");
+
+    let hex = hex::encode(hash.finalize());
+
+    info!("Transfer complete. {cur_len} bytes, sha256 {hex}");
 
     let attrs = DfCloseAttributes::empty();
     let res = df_close(chan, fd, attrs).await;
