@@ -62,7 +62,11 @@ pub struct MctpUsbRedir {
 }
 
 impl usbredirparser::ParserHandler for UsbRedirHandler {
-    fn read(&mut self, _parser: &Parser, buf: &mut [u8]) -> std::io::Result<usize> {
+    fn read(
+        &mut self,
+        _parser: &Parser,
+        buf: &mut [u8],
+    ) -> std::io::Result<usize> {
         let res = self.stream.read(buf);
         trace!("read:in:{:x?}", buf);
         match res {
@@ -73,7 +77,11 @@ impl usbredirparser::ParserHandler for UsbRedirHandler {
             r => r,
         }
     }
-    fn write(&mut self, _parser: &Parser, buf: &[u8]) -> std::io::Result<usize> {
+    fn write(
+        &mut self,
+        _parser: &Parser,
+        buf: &[u8],
+    ) -> std::io::Result<usize> {
         self.stream.write(buf)
     }
     fn hello(&mut self, parser: &Parser, _hello: &usbredirparser::Hello) {
@@ -360,7 +368,10 @@ impl MctpUsbRedir {
             in_chan: redir_in_sender,
             stream: fd,
         };
-        let parser = usbredirparser::Parser::new(handler, usbredirparser::DeviceType::Host);
+        let parser = usbredirparser::Parser::new(
+            handler,
+            usbredirparser::DeviceType::Host,
+        );
 
         let (xfer_out_sender, xfer_out_receiver) = async_channel::unbounded();
         let (xfer_in_sender, xfer_in_receiver) = async_channel::unbounded();
@@ -511,11 +522,13 @@ impl MctpUsbRedirPort {
     }
 
     fn cancel(&mut self, id: u64) {
-        let res =
-            self.in_xfer_queue
-                .iter()
-                .enumerate()
-                .find_map(|(i, e)| if e.0 == id { Some(i) } else { None });
+        let res = self.in_xfer_queue.iter().enumerate().find_map(|(i, e)| {
+            if e.0 == id {
+                Some(i)
+            } else {
+                None
+            }
+        });
         if let Some(idx) = res {
             self.in_xfer_queue.remove(idx);
         } else {

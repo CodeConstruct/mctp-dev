@@ -5,10 +5,13 @@ use argh::FromArgs;
 use futures::{select, FutureExt};
 use log::{debug, info, warn, LevelFilter};
 use mctp::{AsyncListener, AsyncRespChannel, Eid};
-use mctp_estack::router::{PortBottom, PortBuilder, PortId, PortLookup, PortStorage, Router};
+use mctp_estack::router::{
+    PortBottom, PortBuilder, PortId, PortLookup, PortStorage, Router,
+};
 #[cfg(feature = "nvme-mi")]
 use nvme_mi_dev::nvme::{
-    ManagementEndpoint, PCIePort, PortType, Subsystem, SubsystemInfo, TwoWirePort,
+    ManagementEndpoint, PCIePort, PortType, Subsystem, SubsystemInfo,
+    TwoWirePort,
 };
 use std::time::Instant;
 
@@ -73,7 +76,11 @@ impl Transport {
 struct Routes {}
 
 impl PortLookup for Routes {
-    fn by_eid(&mut self, _eid: Eid, source_port: Option<PortId>) -> Option<PortId> {
+    fn by_eid(
+        &mut self,
+        _eid: Eid,
+        source_port: Option<PortId>,
+    ) -> Option<PortId> {
         // we're an endpoint device, don't forward packets from other ports
         if source_port.is_some() {
             return None;
