@@ -68,7 +68,7 @@ impl usbredirparser::ParserHandler for UsbRedirHandler {
         buf: &mut [u8],
     ) -> std::io::Result<usize> {
         let res = self.stream.read(buf);
-        trace!("read:in:{:x?}", buf);
+        trace!("read:in:{buf:x?}");
         match res {
             Ok(0) => Err(std::io::Error::new(
                 std::io::ErrorKind::BrokenPipe,

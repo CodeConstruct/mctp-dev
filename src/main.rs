@@ -193,8 +193,7 @@ async fn nvme_mi<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
         .attach_namespace(nsid)
         .unwrap_or_else(|_| {
             panic!(
-                "Unable to attach namespace {:?} to controller {:?}",
-                nsid, ctlrid
+                "Unable to attach namespace {nsid:?} to controller {ctlrid:?}"
             )
         });
     let twpid = subsys
