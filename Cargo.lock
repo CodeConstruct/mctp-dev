@@ -760,6 +760,7 @@ dependencies = [
  "nvme-mi-dev",
  "pldm",
  "pldm-file",
+ "pldm-platform",
  "polling",
  "simplelog",
  "smol",
@@ -912,6 +913,20 @@ dependencies = [
  "crc",
  "deku 0.19.1 (git+https://github.com/CodeConstruct/deku.git?tag=cc%2Fdeku-v0.19.1%2Fno-alloc-3)",
  "enumset",
+ "log",
+ "mctp",
+ "num-derive",
+ "num-traits",
+ "pldm",
+]
+
+[[package]]
+name = "pldm-platform"
+version = "0.1.0"
+source = "git+https://github.com/CodeConstruct/mctp-rs?rev=851360ed19ef78f2e7672daa90900cb4f38ad0b6#851360ed19ef78f2e7672daa90900cb4f38ad0b6"
+dependencies = [
+ "deku 0.19.1 (git+https://github.com/CodeConstruct/deku.git?tag=cc%2Fdeku-v0.19.1%2Fno-alloc-3)",
+ "heapless",
  "log",
  "mctp",
  "num-derive",

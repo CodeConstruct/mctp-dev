@@ -11,7 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 1. Added support for NVMe-MI responder, gated on a new `nvme-mi` cargo feature
 
 2. Added support for a PLDM for File Transfer requester, triggered on MCTP
-   address assignment.
+   address assignment. This performs a PLDM PDR query to retrieve the
+   File Identifier to transfer.
 
 ### Changed
 

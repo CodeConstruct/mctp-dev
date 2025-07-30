@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use log::{debug, info, warn};
 
 use mctp_estack::{control::ControlEvent, router::Router};
@@ -9,6 +9,7 @@ use pldm_file::{
     client::{df_close, df_open, df_read_with},
     proto::{DfCloseAttributes, DfOpenAttributes, FileIdentifier},
 };
+use pldm_platform::{proto::PdrRecord, requester as platrq};
 
 async fn pldm_control(chan: &mut impl mctp::AsyncReqChannel) -> Result<()> {
     let req_types = [pldm_file::PLDM_TYPE_FILE_TRANSFER];
@@ -25,15 +26,37 @@ async fn pldm_control(chan: &mut impl mctp::AsyncReqChannel) -> Result<()> {
 }
 
 async fn pldm_pdr(
-    mut _chan: &mut impl mctp::AsyncReqChannel,
+    chan: &mut impl mctp::AsyncReqChannel,
 ) -> Result<(FileIdentifier, usize)> {
-    Ok((FileIdentifier(0), 4096))
+    // PDR Repository Info
+    let pdr_info = platrq::get_pdr_repository_info(chan)
+        .await
+        .context("Get PDR Repository Info failed")?;
+
+    debug!("PDR Repository Info: {pdr_info:?}");
+
+    // File Descriptor PDR
+    let pdr_record = 1;
+    let pdr = platrq::get_pdr(chan, pdr_record)
+        .await
+        .context("Get PDR failed")?;
+
+    let PdrRecord::FileDescriptor(file) = pdr else {
+        bail!("Unexpected PDR record {pdr_record}: {pdr:?}");
+    };
+
+    debug!("PDR: {file:?}");
+
+    Ok((
+        FileIdentifier(file.file_identifier),
+        file.file_max_size as usize,
+    ))
 }
 
 async fn pldm_file(
     chan: &mut impl mctp::AsyncReqChannel,
     file: FileIdentifier,
-    _size: usize,
+    size: usize,
 ) -> Result<()> {
     let attrs = DfOpenAttributes::empty();
     let fd = df_open(chan, file, attrs).await.context("DfOpen failed")?;
@@ -41,11 +64,15 @@ async fn pldm_file(
     debug!("Open: {fd:?}");
 
     let mut buf = Vec::new();
-    let req_len = 4096;
+    let req_len = size;
 
     debug!("Reading...");
     let res = df_read_with(chan, fd, 0, req_len, |part| {
-        debug!("  {} bytes", part.len());
+        debug!(
+            "  {} bytes, {}/{req_len}",
+            part.len(),
+            buf.len() + part.len()
+        );
         if buf.len() + part.len() > req_len {
             warn!("  data overflow!");
             Err(PldmError::NoSpace)
