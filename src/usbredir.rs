@@ -68,7 +68,7 @@ impl usbredirparser::ParserHandler for UsbRedirHandler {
         buf: &mut [u8],
     ) -> std::io::Result<usize> {
         let res = self.stream.read(buf);
-        trace!("read:in:{buf:x?}");
+        trace!("read:in:[{}]:{buf:x?}", buf.len());
         match res {
             Ok(0) => Err(std::io::Error::new(
                 std::io::ErrorKind::BrokenPipe,
@@ -110,7 +110,7 @@ impl usbredirparser::ParserHandler for UsbRedirHandler {
         pkt: &usbredirparser::ControlPacket,
         data: &[u8],
     ) {
-        debug!("control packet {id} {pkt:x?}, data: {data:x?}");
+        trace!("control packet {id} {pkt:x?}, data: {data:x?}");
         if pkt.request == USB_CTRL_GET_DESCRIPTOR {
             self.control_get_descriptor(parser, id, pkt)
         }
@@ -123,7 +123,7 @@ impl usbredirparser::ParserHandler for UsbRedirHandler {
         pkt: &usbredirparser::BulkPacket,
         data: &[u8],
     ) {
-        debug!("bulk packet {id} {pkt:x?}, data: {data:x?}");
+        trace!("bulk packet {id} {pkt:x?}, data[{}]: {data:x?}", data.len());
         match pkt.endpoint {
             EP_ADDR_IN => {
                 self.in_chan
@@ -273,7 +273,7 @@ impl UsbRedirHandler {
         let mut resp = usbredirparser::ControlPacket { ..*req };
         let (desc_type, desc_idx): (u8, u8) =
             (((req.value >> 8) & 0xff) as u8, ((req.value) & 0xff) as u8);
-        debug!("desc request for type {desc_type:02x} idx {desc_idx:02x}");
+        trace!("desc request for type {desc_type:02x} idx {desc_idx:02x}");
         let mut v = Vec::new();
         let mut data = match desc_type {
             USB_DESC_TYPE_DEVICE => DEV_DESC.as_slice(),
@@ -495,7 +495,7 @@ impl MctpUsbRedirPort {
                     pkt.status = usbredirparser::STATUS_SUCCESS;
                     pkt.length = xfer.len() as u16;
 
-                    debug!("tx xfer: {xfer:02x?}");
+                    trace!("tx xfer: {xfer:02x?}");
                     self.parser.send_bulk_packet(id, &pkt, &xfer);
                 } else {
                     warn!("tx/xfer failure: {r:?}");
