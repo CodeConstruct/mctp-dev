@@ -10,7 +10,7 @@ use mctp_estack::router::{
 };
 #[cfg(feature = "nvme-mi")]
 use nvme_mi_dev::nvme::{
-    ManagementEndpoint, PCIePort, PortType, Subsystem, SubsystemInfo,
+    ManagementEndpoint, PciePort, PortType, Subsystem, SubsystemInfo,
     TwoWirePort,
 };
 use std::time::Instant;
@@ -177,7 +177,7 @@ async fn nvme_mi<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
 
     let mut subsys = Subsystem::new(SubsystemInfo::environment());
     let ppid = subsys
-        .add_port(PortType::PCIe(PCIePort::new()))
+        .add_port(PortType::Pcie(PciePort::new()))
         .expect("Unable to create PCIe port");
     let ctlrid = subsys
         .add_controller(ppid)

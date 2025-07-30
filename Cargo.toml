@@ -23,10 +23,14 @@ futures = "0.3.31"
 futures-io = "0.3.30"
 log = "0.4.22"
 mctp = "0.2.0"
-mctp-estack = "0.1.0"
-nvme-mi-dev = { git = "https://github.com/CodeConstruct/nvme-mi-dev", rev = "822803a6cc4b9481c5fb389c6658a7db7e803eb8", optional = true }
+mctp-estack = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "851360ed19ef78f2e7672daa90900cb4f38ad0b6", package = "mctp-estack" }
+nvme-mi-dev = { git = "https://github.com/CodeConstruct/nvme-mi-dev", branch = "main", optional = true }
 polling = "3.7.4"
 simplelog = "0.12.2"
 smol = "2.0.0"
 usbredirparser = { git = "https://github.com/CodeConstruct/usbredir-rs", branch = "main", package = "usbredirparser" }
 uuid = { version = "1.16.0", features = ["v4"] }
+
+# update nvme-mi-dev mctp dependency
+[patch.crates-io]
+mctp = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "851360ed19ef78f2e7672daa90900cb4f38ad0b6", package = "mctp" }
