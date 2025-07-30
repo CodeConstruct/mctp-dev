@@ -9,6 +9,7 @@ categories = ["network-programming", "hardware-support"]
 
 [features]
 nvme-mi = ["dep:nvme-mi-dev"]
+pldm = ["dep:pldm", "dep:pldm-file"]
 
 [dependencies]
 anyhow = "1.0.86"
@@ -26,6 +27,8 @@ mctp = "0.2.0"
 mctp-estack = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "851360ed19ef78f2e7672daa90900cb4f38ad0b6", package = "mctp-estack" }
 nvme-mi-dev = { git = "https://github.com/CodeConstruct/nvme-mi-dev", branch = "main", optional = true }
 polling = "3.7.4"
+pldm = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "851360ed19ef78f2e7672daa90900cb4f38ad0b6", package = "pldm", optional = true }
+pldm-file = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "851360ed19ef78f2e7672daa90900cb4f38ad0b6", package = "pldm-file", optional = true }
 simplelog = "0.12.2"
 smol = "2.0.0"
 usbredirparser = { git = "https://github.com/CodeConstruct/usbredir-rs", branch = "main", package = "usbredirparser" }

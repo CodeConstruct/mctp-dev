@@ -17,6 +17,8 @@ cargo test
 sets=(
     ""
     "nvme-mi"
+    "pldm"
+    "nvme-mi,pldm"
 )
 
 for features in "${sets[@]}"

@@ -5,15 +5,19 @@ use argh::FromArgs;
 use futures::{select, FutureExt};
 use log::{debug, info, warn, LevelFilter};
 use mctp::{AsyncListener, AsyncRespChannel, Eid};
-use mctp_estack::router::{
-    PortBottom, PortBuilder, PortId, PortLookup, PortStorage, Router,
+use mctp_estack::{
+    control::{ControlEvent, MctpControl},
+    router::{
+        PortBottom, PortBuilder, PortId, PortLookup, PortStorage, Router,
+    },
 };
+use std::time::Instant;
+
 #[cfg(feature = "nvme-mi")]
 use nvme_mi_dev::nvme::{
     ManagementEndpoint, PciePort, PortType, Subsystem, SubsystemInfo,
     TwoWirePort,
 };
-use std::time::Instant;
 
 mod serial;
 mod usbredir;
@@ -142,9 +146,12 @@ async fn echo<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
     }
 }
 
-async fn control<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
+async fn control<'a>(
+    router: &'a Router<'a>,
+    ctrl_ev_sender: async_channel::Sender<ControlEvent>,
+) -> std::io::Result<()> {
     let mut l = router.listener(mctp::MCTP_TYPE_CONTROL)?;
-    let mut c = mctp_estack::control::MctpControl::new(router);
+    let mut c = MctpControl::new(router);
     let u = uuid::Uuid::new_v4();
 
     let types = [
@@ -165,8 +172,12 @@ async fn control<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
 
         let r = c.handle_async(msg, resp).await;
 
-        if let Err(e) = r {
-            info!("control handler failure: {e}");
+        match r {
+            Err(e) => info!("control handler failure: {e}"),
+            Ok(Some(ev)) => {
+                let _ = ctrl_ev_sender.force_send(ev);
+            }
+            Ok(None) => (),
         }
     }
 }
@@ -219,6 +230,18 @@ async fn nvme_mi<'a>(_router: &'a Router<'a>) -> std::io::Result<()> {
     futures::future::pending().await
 }
 
+#[cfg(feature = "pldm")]
+mod pldm;
+#[cfg(not(feature = "pldm"))]
+mod pldm {
+    pub async fn pldm<'a>(
+        _router: &'a super::Router<'a>,
+        _recv: async_channel::Receiver<super::ControlEvent>,
+    ) -> std::io::Result<()> {
+        futures::future::pending().await
+    }
+}
+
 fn main() -> Result<()> {
     let opts: Options = argh::from_env();
 
@@ -260,12 +283,15 @@ fn main() -> Result<()> {
         None => futures::future::Either::Right(futures::future::pending()),
     };
 
+    let (ctrl_ev_tx, ctrl_ev_rx) = async_channel::bounded(1);
+
     smol::block_on(async {
         select!(
             _ = fut.fuse() => (),
             _ = run(transport, port_bottom, &router, start_time).fuse() => (),
-            _ = control(&router).fuse() => (),
-            _ = nvme_mi(&router).fuse() => ()
+            _ = control(&router, ctrl_ev_tx).fuse() => (),
+            _ = nvme_mi(&router).fuse() => (),
+            _ = pldm::pldm(&router, ctrl_ev_rx).fuse() => (),
         )
     });
 
