@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use log::{debug, info, warn};
 use sha2::{Digest, Sha256};
 
@@ -37,14 +37,20 @@ async fn pldm_pdr(
     debug!("PDR Repository Info: {pdr_info:?}");
 
     // File Descriptor PDR
-    let pdr_record = 1;
-    let pdr = platrq::get_pdr(chan, pdr_record)
-        .await
-        .context("Get PDR failed")?;
+    let mut pdrs = platrq::get_pdr(chan);
 
-    let PdrRecord::FileDescriptor(file) = pdr else {
-        bail!("Unexpected PDR record {pdr_record}: {pdr:?}");
+    let file = loop {
+        match pdrs.next().await {
+            None => break None,
+            Some(Ok(PdrRecord::FileDescriptor(file))) => break Some(file),
+            Some(Ok(_)) => (),
+            Some(Err(e)) => {
+                debug!("Error reading PDR, skipping: {e}");
+            }
+        }
     };
+
+    let file = file.context("No File Descriptor PDR record found")?;
 
     debug!("PDR: {file:?}");
 

@@ -25,12 +25,12 @@ futures-io = "0.3.30"
 hex = { version = "0.4.3", optional = true }
 log = "0.4.22"
 mctp = "0.2.0"
-mctp-estack = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "851360ed19ef78f2e7672daa90900cb4f38ad0b6", package = "mctp-estack" }
+mctp-estack = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "2492e094f93f5f36f900b3ee958a289630400030", package = "mctp-estack" }
 nvme-mi-dev = { git = "https://github.com/CodeConstruct/nvme-mi-dev", branch = "main", optional = true }
 polling = "3.7.4"
-pldm = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "851360ed19ef78f2e7672daa90900cb4f38ad0b6", package = "pldm", optional = true }
-pldm-file = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "851360ed19ef78f2e7672daa90900cb4f38ad0b6", package = "pldm-file", optional = true }
-pldm-platform = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "851360ed19ef78f2e7672daa90900cb4f38ad0b6", package = "pldm-platform", optional = true }
+pldm = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "2492e094f93f5f36f900b3ee958a289630400030", package = "pldm", optional = true }
+pldm-file = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "2492e094f93f5f36f900b3ee958a289630400030", package = "pldm-file", optional = true }
+pldm-platform = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "2492e094f93f5f36f900b3ee958a289630400030", package = "pldm-platform", optional = true }
 sha2 = {version = "0.10.9", optional = true }
 simplelog = "0.12.2"
 smol = "2.0.0"
@@ -39,4 +39,4 @@ uuid = { version = "1.16.0", features = ["v4"] }
 
 # update nvme-mi-dev mctp dependency
 [patch.crates-io]
-mctp = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "851360ed19ef78f2e7672daa90900cb4f38ad0b6", package = "mctp" }
+mctp = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "2492e094f93f5f36f900b3ee958a289630400030", package = "mctp" }
