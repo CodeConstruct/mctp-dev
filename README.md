@@ -17,6 +17,18 @@ NVMe-MI protocol, emulating a simple MCTP-managed storage device. The NVMe-MI
 responder implementation is provided by the
 [`nvme-mi-dev`](https://github.com/CodeConstruct/nvme-mi-dev) crate.
 
+We also support a test client for PLDM for File Transfer (type 7). When
+`mctp-dev` is assigned an MCTP EID, it will perform PLDM operations to
+read a file from the bus owner EID.
+
+The PLDM client expects to find the File record as the first PDR entry, and
+will attempt to transfer the entire file. Upon completion, the file size and
+sha256 checksum will be printed:
+
+```
+11:06:34 [INFO] Transfer complete. 16384 bytes, sha256 b4d3f1859dc8170c1e1f34b936aff05339a7723b6680894380c23dd84ff7e22b
+```
+
 # Building
 
 For most systems:
@@ -35,22 +47,16 @@ To incorporate NVMe-MI responder support, add the `nvme-mi` feature:
 cargo build --features nvme-mi
 ```
 
-We also support a test client for PLDM for File Transfer (type 7). When
-`mctp-dev` is assigned an MCTP EID, it will perform PLDM operations to
-read a file from the bus owner EID.
-
-The PLDM client expects to find the File record as the first PDR entry, and
-will attempt to transfer the entire file. Upon completion, the file size and
-sha256 checksum will be printed:
-
-```
-11:06:34 [INFO] Transfer complete. 16384 bytes, sha256 b4d3f1859dc8170c1e1f34b936aff05339a7723b6680894380c23dd84ff7e22b
-```
-
 To enable the PLDM File functionality, add the `pldm` feature:
 
 ```sh
 cargo build --features pldm
+```
+
+Both may be enabled in the same build too:
+
+```sh
+cargo build --features nvme-mi,pldm
 ```
 
 # Running
