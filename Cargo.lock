@@ -744,7 +744,7 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 [[package]]
 name = "mctp"
 version = "0.2.0"
-source = "git+https://github.com/CodeConstruct/mctp-rs?rev=2492e094f93f5f36f900b3ee958a289630400030#2492e094f93f5f36f900b3ee958a289630400030"
+source = "git+https://github.com/CodeConstruct/mctp-rs?rev=be058dc5cd737799a419f7edd0e2635aae990948#be058dc5cd737799a419f7edd0e2635aae990948"
 
 [[package]]
 name = "mctp-dev"
@@ -779,7 +779,7 @@ dependencies = [
 [[package]]
 name = "mctp-estack"
 version = "0.1.0"
-source = "git+https://github.com/CodeConstruct/mctp-rs?rev=2492e094f93f5f36f900b3ee958a289630400030#2492e094f93f5f36f900b3ee958a289630400030"
+source = "git+https://github.com/CodeConstruct/mctp-rs?rev=be058dc5cd737799a419f7edd0e2635aae990948#be058dc5cd737799a419f7edd0e2635aae990948"
 dependencies = [
  "crc",
  "embassy-sync",
@@ -902,7 +902,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 [[package]]
 name = "pldm"
 version = "0.2.0"
-source = "git+https://github.com/CodeConstruct/mctp-rs?rev=2492e094f93f5f36f900b3ee958a289630400030#2492e094f93f5f36f900b3ee958a289630400030"
+source = "git+https://github.com/CodeConstruct/mctp-rs?rev=be058dc5cd737799a419f7edd0e2635aae990948#be058dc5cd737799a419f7edd0e2635aae990948"
 dependencies = [
  "crc",
  "deku 0.19.1 (git+https://github.com/CodeConstruct/deku.git?tag=cc%2Fdeku-v0.19.1%2Fno-alloc-3)",
@@ -916,7 +916,7 @@ dependencies = [
 [[package]]
 name = "pldm-file"
 version = "0.1.0"
-source = "git+https://github.com/CodeConstruct/mctp-rs?rev=2492e094f93f5f36f900b3ee958a289630400030#2492e094f93f5f36f900b3ee958a289630400030"
+source = "git+https://github.com/CodeConstruct/mctp-rs?rev=be058dc5cd737799a419f7edd0e2635aae990948#be058dc5cd737799a419f7edd0e2635aae990948"
 dependencies = [
  "crc",
  "deku 0.19.1 (git+https://github.com/CodeConstruct/deku.git?tag=cc%2Fdeku-v0.19.1%2Fno-alloc-3)",
@@ -931,7 +931,7 @@ dependencies = [
 [[package]]
 name = "pldm-platform"
 version = "0.1.0"
-source = "git+https://github.com/CodeConstruct/mctp-rs?rev=2492e094f93f5f36f900b3ee958a289630400030#2492e094f93f5f36f900b3ee958a289630400030"
+source = "git+https://github.com/CodeConstruct/mctp-rs?rev=be058dc5cd737799a419f7edd0e2635aae990948#be058dc5cd737799a419f7edd0e2635aae990948"
 dependencies = [
  "deku 0.19.1 (git+https://github.com/CodeConstruct/deku.git?tag=cc%2Fdeku-v0.19.1%2Fno-alloc-3)",
  "heapless",
