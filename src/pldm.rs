@@ -120,10 +120,11 @@ async fn pldm_session(mut chan: impl mctp::AsyncReqChannel) -> Result<()> {
     Ok(())
 }
 
-pub async fn pldm<'a>(
-    router: &'a Router<'a>,
+pub async fn pldm(
+    router: &Router<'_>,
     ctrl_ev_receiver: async_channel::Receiver<ControlEvent>,
 ) -> std::io::Result<()> {
+    info!("PLDM handler started");
     loop {
         let peer = loop {
             let res = ctrl_ev_receiver.recv().await;

@@ -7,9 +7,7 @@ use log::{debug, info, warn, LevelFilter};
 use mctp::{AsyncListener, AsyncRespChannel, Eid};
 use mctp_estack::{
     control::{ControlEvent, MctpControl},
-    router::{
-        PortBottom, PortBuilder, PortId, PortLookup, PortStorage, Router,
-    },
+    router::{Port, PortId, PortLookup, PortTop, Router},
 };
 use std::time::Instant;
 
@@ -81,15 +79,15 @@ struct Routes {}
 
 impl PortLookup for Routes {
     fn by_eid(
-        &mut self,
+        &self,
         _eid: Eid,
         source_port: Option<PortId>,
-    ) -> Option<PortId> {
+    ) -> (Option<PortId>, Option<usize>) {
         // we're an endpoint device, don't forward packets from other ports
         if source_port.is_some() {
-            return None;
+            return (None, None);
         }
-        Some(PortId(0))
+        (Some(PortId(0)), None)
     }
 }
 
@@ -101,10 +99,10 @@ async fn update_router_time(router: &Router<'_>, start_time: Instant) {
     }
 }
 
-async fn run<'a>(
+async fn run(
     mut transport: Transport,
-    mut port: PortBottom<'_>,
-    router: &'a Router<'a>,
+    mut port: Port<'_>,
+    router: &Router<'_>,
     start_time: Instant,
 ) -> std::io::Result<()> {
     let portid = PortId(0);
@@ -146,8 +144,8 @@ async fn echo<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
     }
 }
 
-async fn control<'a>(
-    router: &'a Router<'a>,
+async fn control(
+    router: &Router<'_>,
     ctrl_ev_sender: async_channel::Sender<ControlEvent>,
 ) -> std::io::Result<()> {
     let mut l = router.listener(mctp::MCTP_TYPE_CONTROL)?;
@@ -183,7 +181,7 @@ async fn control<'a>(
 }
 
 #[cfg(feature = "nvme-mi")]
-async fn nvme_mi<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
+async fn nvme_mi(router: &Router<'_>) -> std::io::Result<()> {
     let mut l = router.listener(mctp::MCTP_TYPE_NVME)?;
 
     let mut subsys = Subsystem::new(SubsystemInfo::environment());
@@ -226,7 +224,7 @@ async fn nvme_mi<'a>(router: &'a Router<'a>) -> std::io::Result<()> {
     }
 }
 #[cfg(not(feature = "nvme-mi"))]
-async fn nvme_mi<'a>(_router: &'a Router<'a>) -> std::io::Result<()> {
+async fn nvme_mi(_router: &Router<'_>) -> std::io::Result<()> {
     futures::future::pending().await
 }
 
@@ -234,8 +232,8 @@ async fn nvme_mi<'a>(_router: &'a Router<'a>) -> std::io::Result<()> {
 mod pldm;
 #[cfg(not(feature = "pldm"))]
 mod pldm {
-    pub async fn pldm<'a>(
-        _router: &'a super::Router<'a>,
+    pub async fn pldm(
+        _router: &super::Router<'_>,
         _recv: async_channel::Receiver<super::ControlEvent>,
     ) -> std::io::Result<()> {
         futures::future::pending().await
@@ -249,21 +247,14 @@ fn main() -> Result<()> {
     simplelog::SimpleLogger::init(LevelFilter::Debug, conf)?;
 
     let eid = Eid(0);
-    let mtu = 68usize;
 
-    let mut port_storage = PortStorage::<4>::new();
-    let mut port = PortBuilder::new(&mut port_storage);
-    let (port_top, port_bottom) = port.build(mtu).unwrap();
-    let ports = [port_top];
+    let mut port_top = PortTop::new();
+    let routes = Routes {};
+    let mut router = Router::new(eid, &routes, 0);
+    let port_id = router.add_port(&mut port_top)?;
+    let port = router.port(port_id)?;
 
-    let start_time = Instant::now();
-
-    let stack = mctp_estack::Stack::new(eid, mtu, 0u64);
-
-    let mut routes = Routes {};
-    let router = Router::new(stack, &ports, &mut routes);
-
-    let (transport, mut port) = match opts.transport {
+    let (transport, mut t_port) = match opts.transport {
         TransportSubcommand::Serial(s) => {
             let serial = serial::MctpSerial::new(&s.tty)?;
             info!("Created MCTP Serial transport on {}", s.tty);
@@ -271,14 +262,14 @@ fn main() -> Result<()> {
             (t, None)
         }
         TransportSubcommand::Usb(u) => {
-            let (usbredir, port) = usbredir::MctpUsbRedir::new(&u.path)?;
+            let (usbredir, t_port) = usbredir::MctpUsbRedir::new(&u.path)?;
             info!("Created MCTP USB transport on {}", u.path);
             let t = Transport::Usb(usbredir);
-            (t, Some(port))
+            (t, Some(t_port))
         }
     };
 
-    let fut = match port {
+    let fut = match t_port {
         Some(ref mut p) => futures::future::Either::Left(p.process()),
         None => futures::future::Either::Right(futures::future::pending()),
     };
@@ -288,12 +279,13 @@ fn main() -> Result<()> {
     smol::block_on(async {
         select!(
             _ = fut.fuse() => (),
-            _ = run(transport, port_bottom, &router, start_time).fuse() => (),
+            _ = run(transport, port, &router, Instant::now()).fuse() => (),
             _ = control(&router, ctrl_ev_tx).fuse() => (),
             _ = nvme_mi(&router).fuse() => (),
             _ = pldm::pldm(&router, ctrl_ev_rx).fuse() => (),
-        )
-    });
+        );
+        Ok::<_, anyhow::Error>(())
+    })?;
 
     Ok(())
 }
