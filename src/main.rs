@@ -103,9 +103,9 @@ async fn run(
     mut transport: Transport,
     mut port: Port<'_>,
     router: &Router<'_>,
-    start_time: Instant,
 ) -> std::io::Result<()> {
     let portid = PortId(0);
+    let start_time = Instant::now();
     loop {
         select!(
             r = transport.recv().fuse() => {
@@ -279,7 +279,7 @@ fn main() -> Result<()> {
     smol::block_on(async {
         select!(
             _ = fut.fuse() => (),
-            _ = run(transport, port, &router, Instant::now()).fuse() => (),
+            _ = run(transport, port, &router).fuse() => (),
             _ = control(&router, ctrl_ev_tx).fuse() => (),
             _ = nvme_mi(&router).fuse() => (),
             _ = pldm::pldm(&router, ctrl_ev_rx).fuse() => (),
