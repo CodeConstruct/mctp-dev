@@ -353,9 +353,9 @@ dependencies = [
 [[package]]
 name = "deku"
 version = "0.19.1"
-source = "git+https://github.com/CodeConstruct/deku.git?tag=cc%2Fdeku-v0.19.1%2Fno-alloc-6#e1e2eb703ea7f8d68fb7ff01140ca16e021cb11c"
+source = "git+https://github.com/sharksforarms/deku.git?rev=e5363bc11e123bfcfd3467a2a90aeef8b588f432#e5363bc11e123bfcfd3467a2a90aeef8b588f432"
 dependencies = [
- "deku_derive 0.19.1 (git+https://github.com/CodeConstruct/deku.git?tag=cc%2Fdeku-v0.19.1%2Fno-alloc-6)",
+ "deku_derive 0.19.1 (git+https://github.com/sharksforarms/deku.git?rev=e5363bc11e123bfcfd3467a2a90aeef8b588f432)",
  "no_std_io2",
  "rustversion",
 ]
@@ -374,7 +374,7 @@ dependencies = [
 [[package]]
 name = "deku_derive"
 version = "0.19.1"
-source = "git+https://github.com/CodeConstruct/deku.git?tag=cc%2Fdeku-v0.19.1%2Fno-alloc-6#e1e2eb703ea7f8d68fb7ff01140ca16e021cb11c"
+source = "git+https://github.com/sharksforarms/deku.git?rev=e5363bc11e123bfcfd3467a2a90aeef8b588f432#e5363bc11e123bfcfd3467a2a90aeef8b588f432"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -511,6 +511,12 @@ name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+
+[[package]]
+name = "flagset"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7ac824320a75a52197e8f2d787f6a38b6718bb6897a35142d749af3c0e8f4fe"
 
 [[package]]
 name = "fnv"
@@ -853,16 +859,15 @@ dependencies = [
 [[package]]
 name = "nvme-mi-dev"
 version = "0.1.0"
-source = "git+https://github.com/CodeConstruct/nvme-mi-dev?branch=main#45d593dec1d2d4a243371c2c8a227e65e37a88f2"
+source = "git+https://github.com/CodeConstruct/nvme-mi-dev?branch=main#421cd454dc53763d991df0fe748965ea07002527"
 dependencies = [
  "crc",
- "deku 0.19.1 (git+https://github.com/CodeConstruct/deku.git?tag=cc%2Fdeku-v0.19.1%2Fno-alloc-6)",
+ "deku 0.19.1 (git+https://github.com/sharksforarms/deku.git?rev=e5363bc11e123bfcfd3467a2a90aeef8b588f432)",
+ "flagset",
  "heapless",
  "hmac",
  "log",
  "mctp",
- "num-derive",
- "num-traits",
  "sha2",
  "uuid",
 ]

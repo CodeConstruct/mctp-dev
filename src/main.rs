@@ -12,9 +12,9 @@ use mctp_estack::{
 use std::time::Instant;
 
 #[cfg(feature = "nvme-mi")]
-use nvme_mi_dev::nvme::{
-    ManagementEndpoint, PciePort, PortType, Subsystem, SubsystemInfo,
-    TwoWirePort,
+use nvme_mi_dev::{
+    CommandEffectError, ManagementEndpoint, PciePort, PortType, Subsystem,
+    SubsystemInfo, TwoWirePort,
 };
 
 mod serial;
@@ -220,7 +220,10 @@ async fn nvme_mi(router: &Router<'_>) -> std::io::Result<()> {
         };
 
         debug!("Handling NVMe-MI message: {msg:x?}");
-        mep.handle_async(&mut subsys, msg, ic, resp).await;
+        mep.handle_async(&mut subsys, msg, ic, resp, async |_| {
+            Err(CommandEffectError::Unsupported)
+        })
+        .await;
     }
 }
 #[cfg(not(feature = "nvme-mi"))]
