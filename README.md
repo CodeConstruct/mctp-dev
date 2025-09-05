@@ -5,7 +5,7 @@
 device, connected to a usbredir (or serial) session.
 
 Since the qemu emulator can speak usbredir too, this allows us to create a MCTP
-device that can be connected to a qemu quest, and is intended for testing and
+device that can be connected to a qemu guest, and is intended for testing and
 development of the guest system's MCTP stack.
 
 The MCTP endpoint implements the MCTP control protocol, allowing device
