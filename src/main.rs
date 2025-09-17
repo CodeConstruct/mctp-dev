@@ -220,8 +220,30 @@ async fn nvme_mi(router: &Router<'_>) -> std::io::Result<()> {
         };
 
         debug!("Handling NVMe-MI message: {msg:x?}");
-        mep.handle_async(&mut subsys, msg, ic, resp, async |_| {
-            Err(CommandEffectError::Unsupported)
+        mep.handle_async(&mut subsys, msg, ic, resp, async |ce| match ce {
+            nvme_mi_dev::CommandEffect::SetMtu { port_id, mtus } => {
+                if port_id != twpid {
+                    warn!("NVMe-MI: Bad Port ID for Set MTU: {port_id:?}");
+                    return Err(CommandEffectError::InternalError);
+                }
+
+                if mtus != 64 {
+                    warn!("NVMe-MI: Application lacks support for MTU ({mtus}) != BTU (64)");
+                    return Err(CommandEffectError::Unsupported);
+                }
+
+                Ok(())
+            }
+            nvme_mi_dev::CommandEffect::SetSmbusFreq { port_id: _, freq } => {
+                use nvme_mi_dev::nvme::mi::SmbusFrequency;
+
+                if freq != SmbusFrequency::Freq100Khz {
+                    warn!("NVMe-MI: Application lacks support for I2C bus frequency {:?}", freq);
+                    return Err(CommandEffectError::Unsupported);
+                }
+
+                Ok(())
+            }
         })
         .await;
     }
