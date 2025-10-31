@@ -237,9 +237,9 @@ async fn nvme_mi(router: &Router<'_>) -> std::io::Result<()> {
                 Ok(())
             }
             nvme_mi_dev::CommandEffect::SetSmbusFreq { port_id: _, freq } => {
-                use nvme_mi_dev::nvme::mi::SmbusFrequency;
+                use nvme_mi_dev::smbus::BusFrequency;
 
-                if freq != SmbusFrequency::Freq100Khz {
+                if freq != BusFrequency::Freq100Khz {
                     warn!("NVMe-MI: Application lacks support for I2C bus frequency {:?}", freq);
                     return Err(CommandEffectError::Unsupported);
                 }

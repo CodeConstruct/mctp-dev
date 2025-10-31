@@ -23,10 +23,10 @@ embedded-io-async = { version = "0.6" }
 futures = "0.3.31"
 futures-io = "0.3.30"
 hex = { version = "0.4.3", optional = true }
-log = "0.4.22"
+log = "0.4.28"
 mctp = "0.2.0"
 mctp-estack = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "77da3b1c4d35b7c9ba37747da968d29fc4cde696", package = "mctp-estack" }
-nvme-mi-dev = { git = "https://github.com/CodeConstruct/nvme-mi-dev", branch = "main", optional = true }
+nvme-mi-dev = { version = "0.1.0", optional = true }
 polling = "3.7.4"
 pldm = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "77da3b1c4d35b7c9ba37747da968d29fc4cde696", package = "pldm", optional = true }
 pldm-file = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "77da3b1c4d35b7c9ba37747da968d29fc4cde696", package = "pldm-file", optional = true }
