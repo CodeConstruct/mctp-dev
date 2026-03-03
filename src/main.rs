@@ -154,6 +154,8 @@ async fn control(
 
     let types = [
         mctp::MCTP_TYPE_CONTROL,
+        #[cfg(feature = "pldm")]
+        mctp::MCTP_TYPE_PLDM,
         #[cfg(feature = "nvme-mi")]
         mctp::MCTP_TYPE_NVME,
     ];
