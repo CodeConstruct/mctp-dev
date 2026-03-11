@@ -1295,7 +1295,7 @@ checksum = "5a5f39404a5da50712a4c1eecf25e90dd62b613502b7e925fd4e4d19b5c96512"
 [[package]]
 name = "usbredirparser"
 version = "0.5.0"
-source = "git+https://github.com/CodeConstruct/usbredir-rs?branch=main#ca9bc7c10cb0b56526512bbeab3a36e6b3b18138"
+source = "git+https://github.com/CodeConstruct/usbredir-rs?branch=main#36c897ddeb4319b4d1327788e70eced536e12b36"
 dependencies = [
  "libc",
  "log",
@@ -1305,7 +1305,7 @@ dependencies = [
 [[package]]
 name = "usbredirparser-sys"
 version = "0.5.0"
-source = "git+https://github.com/CodeConstruct/usbredir-rs?branch=main#ca9bc7c10cb0b56526512bbeab3a36e6b3b18138"
+source = "git+https://github.com/CodeConstruct/usbredir-rs?branch=main#36c897ddeb4319b4d1327788e70eced536e12b36"
 dependencies = [
  "system-deps",
 ]
