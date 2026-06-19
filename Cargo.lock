@@ -797,7 +797,7 @@ checksum = "953f07c43838f8e6f9758cab68bf5bed85465e7587ebe0b823f1bcd81978ad3a"
 [[package]]
 name = "mctp"
 version = "0.2.0"
-source = "git+https://github.com/CodeConstruct/mctp-rs?rev=77da3b1c4d35b7c9ba37747da968d29fc4cde696#77da3b1c4d35b7c9ba37747da968d29fc4cde696"
+source = "git+https://github.com/CodeConstruct/mctp-rs?rev=5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9#5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9"
 
 [[package]]
 name = "mctp-dev"
@@ -832,10 +832,11 @@ dependencies = [
 [[package]]
 name = "mctp-estack"
 version = "0.1.0"
-source = "git+https://github.com/CodeConstruct/mctp-rs?rev=77da3b1c4d35b7c9ba37747da968d29fc4cde696#77da3b1c4d35b7c9ba37747da968d29fc4cde696"
+source = "git+https://github.com/CodeConstruct/mctp-rs?rev=5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9#5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9"
 dependencies = [
  "crc",
  "embassy-sync",
+ "embedded-io",
  "embedded-io-async",
  "heapless",
  "log",
@@ -955,7 +956,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 [[package]]
 name = "pldm"
 version = "0.2.0"
-source = "git+https://github.com/CodeConstruct/mctp-rs?rev=77da3b1c4d35b7c9ba37747da968d29fc4cde696#77da3b1c4d35b7c9ba37747da968d29fc4cde696"
+source = "git+https://github.com/CodeConstruct/mctp-rs?rev=5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9#5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9"
 dependencies = [
  "crc",
  "deku 0.19.1",
@@ -969,7 +970,7 @@ dependencies = [
 [[package]]
 name = "pldm-file"
 version = "0.1.0"
-source = "git+https://github.com/CodeConstruct/mctp-rs?rev=77da3b1c4d35b7c9ba37747da968d29fc4cde696#77da3b1c4d35b7c9ba37747da968d29fc4cde696"
+source = "git+https://github.com/CodeConstruct/mctp-rs?rev=5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9#5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9"
 dependencies = [
  "crc",
  "deku 0.19.1",
@@ -984,7 +985,7 @@ dependencies = [
 [[package]]
 name = "pldm-platform"
 version = "0.1.0"
-source = "git+https://github.com/CodeConstruct/mctp-rs?rev=77da3b1c4d35b7c9ba37747da968d29fc4cde696#77da3b1c4d35b7c9ba37747da968d29fc4cde696"
+source = "git+https://github.com/CodeConstruct/mctp-rs?rev=5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9#5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9"
 dependencies = [
  "chrono",
  "deku 0.19.1",

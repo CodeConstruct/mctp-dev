@@ -428,8 +428,7 @@ impl MctpUsbRedir {
     pub async fn send(&mut self, pkt: &[u8]) -> mctp::Result<()> {
         let total = pkt.len().checked_add(4).ok_or(mctp::Error::NoSpace)?;
         let mut tx_buf = Vec::with_capacity(total);
-        let mut hdr = [0u8; 4];
-        MctpUsbHandler::header(pkt.len(), &mut hdr)?;
+        let hdr = MctpUsbHandler::header(pkt.len())?;
         tx_buf.extend_from_slice(&hdr);
         tx_buf.extend_from_slice(pkt);
         self.xfer_tx_chan

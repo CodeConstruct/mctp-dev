@@ -8,6 +8,7 @@ repository = "https://github.com/CodeConstruct/mctp-dev"
 categories = ["network-programming", "hardware-support"]
 
 [features]
+default = ["nvme-mi", "pldm"]
 nvme-mi = ["dep:nvme-mi-dev"]
 pldm = ["dep:hex", "dep:pldm", "dep:pldm-file", "dep:pldm-platform", "dep:sha2"]
 
@@ -25,12 +26,12 @@ futures-io = "0.3.30"
 hex = { version = "0.4.3", optional = true }
 log = "0.4.28"
 mctp = "0.2.0"
-mctp-estack = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "77da3b1c4d35b7c9ba37747da968d29fc4cde696", package = "mctp-estack" }
+mctp-estack = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9", package = "mctp-estack" }
 nvme-mi-dev = { version = "0.1.0", optional = true }
 polling = "3.7.4"
-pldm = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "77da3b1c4d35b7c9ba37747da968d29fc4cde696", package = "pldm", optional = true }
-pldm-file = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "77da3b1c4d35b7c9ba37747da968d29fc4cde696", package = "pldm-file", optional = true }
-pldm-platform = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "77da3b1c4d35b7c9ba37747da968d29fc4cde696", package = "pldm-platform", optional = true }
+pldm = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9", package = "pldm", optional = true }
+pldm-file = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9", package = "pldm-file", optional = true }
+pldm-platform = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9", package = "pldm-platform", optional = true }
 sha2 = {version = "0.10.9", optional = true }
 simplelog = "0.12.2"
 smol = "2.0.0"
@@ -39,4 +40,4 @@ uuid = { version = "1.16.0", features = ["v4"] }
 
 # update nvme-mi-dev mctp dependency
 [patch.crates-io]
-mctp = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "77da3b1c4d35b7c9ba37747da968d29fc4cde696", package = "mctp" }
+mctp = { git = "https://github.com/CodeConstruct/mctp-rs", rev = "5a7b9067b4a4515b05ef8b5f4948ba542e8ae1c9", package = "mctp" }

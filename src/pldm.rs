@@ -12,14 +12,20 @@ use pldm_file::{
 };
 use pldm_platform::{proto::PdrRecord, requester as platrq};
 
+const MULTIPART_PART_SIZE: u16 = 512;
+
 async fn pldm_control(chan: &mut impl mctp::AsyncReqChannel) -> Result<()> {
     let req_types = [pldm_file::PLDM_TYPE_FILE_TRANSFER];
     let mut buf = [0u8];
 
-    let (size, neg_types) =
-        negotiate_transfer_parameters(chan, &req_types, &mut buf, 512)
-            .await
-            .context("Negotiate transfer parameters failed")?;
+    let (size, neg_types) = negotiate_transfer_parameters(
+        chan,
+        &req_types,
+        &mut buf,
+        MULTIPART_PART_SIZE,
+    )
+    .await
+    .context("Negotiate transfer parameters failed")?;
 
     debug!("Negotiated multipart size {size} for types {neg_types:?}");
 
@@ -75,7 +81,8 @@ async fn pldm_file(
     let mut cur_len = 0usize;
 
     debug!("Reading...");
-    let res = df_read_with(chan, fd, 0, req_len, |part| {
+    let mut part = [0u8; { MULTIPART_PART_SIZE as usize + 18 }];
+    let res = df_read_with(chan, fd, 0, req_len, &mut part, |part| {
         cur_len += part.len();
         debug!("  {} bytes, {cur_len}/{req_len}", part.len());
         if cur_len > req_len {
